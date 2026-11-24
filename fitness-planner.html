@@ -25,6 +25,14 @@
 .plan-more[open] summary{margin-bottom:10px}
 .plan-export{display:flex;justify-content:flex-end;margin:0 0 14px}
 @media(max-width:460px){.plan-days{gap:4px}.plan-date{font-size:12px;min-height:54px}.plan-date small{font-size:10px}}
+
+.exercise-filters{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
+.exercise-filters input{flex:1 1 200px;min-width:0}
+.exercise-filters select{flex:0 1 auto;min-width:0}
+.add-exercise{border-top:1px solid var(--line);padding-top:12px;margin-top:8px}
+.add-exercise h4{font-size:14px;margin:0 0 7px}
+.add-exercise .addrow{margin-top:8px}
+@media(max-width:460px){.exercise-filters input{flex-basis:100%}}
 </style></head><body><header><div class="eyebrow">COURT & COURSE · TRAINING LAB</div><h1>我的运动周计划</h1><p>篮球 · 健身 · 高尔夫 · 游泳 · 恢复</p></header><main><nav class="nav" id="nav"><button data-tab="week" class="active">每周日程</button><button data-tab="plan">训练打卡</button><button data-tab="library">动作库</button><button data-tab="history">历史与设置</button></nav><div id="week" class="view"></div><div id="plan" class="view hidden"></div><div id="library" class="view hidden"></div><div id="history" class="view hidden"></div><div class="footer">个人训练辅助工具 · 规则生成，不是医疗诊断或实时 AI 教练 · 数据默认保存在当前浏览器，建议定期导出备份。</div></main><div id="toast" class="toast hidden" role="status"></div><script>
 'use strict';
 const E={
@@ -55,7 +63,203 @@ const E={
  lateral:['哑铃侧平举','Lateral Raise','肩部','哑铃','肘微屈，向侧前方抬到舒适高度，慢慢放下，不甩动。','轻绳索侧平举',3,'12–15'],
  walk:['轻松走路','Easy Walk','恢复','无器械','舒适速度，活动后不加重症状即可。','轻阻力自行车',1,'10–20分钟']
 };
-const labels={gym:'健身',basket:'篮球',golf:'高尔夫',swim:'游泳',rest:'休息',recovery:'轻活动'},days=['周一','周二','周三','周四','周五','周六','周日'];const KEY='court-course-planner-v1';const seed=monday(currentDate());let storageOK=true;let data;try{data=JSON.parse(localStorage.getItem(KEY)||'null')}catch(e){storageOK=false}if(!data||!data.weeks)data={current:seed,weeks:{},profile:{weight:'',height:'',sets:3,pain:'none',equipment:'full'}};let tab='week',libSearch='',libCat='all',selectedPlanDate=null;const $=s=>document.querySelector(s),esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+const equipmentLabels = {
+ machine:'器械', dumbbell:'哑铃', cable:'龙门架', barbell:'杠铃',
+ bodyweight:'自重', cardio:'有氧器械'
+};
+const exerciseInfo = {};
+const defaultLoads = {machine:'total', dumbbell:'perHand', cable:'total', barbell:'total', bodyweight:'none', cardio:'none'};
+
+const existingExerciseInfo = {
+ pulldown: ["cable", "单臂高位下拉 背阔肌"],
+ row: ["dumbbell", "胸托划船 上斜划船 上背"],
+ bench: ["dumbbell", "平板哑铃卧推 平板推胸"],
+ shoulder: ["dumbbell", "哑铃肩上推举 肩推"],
+ face: ["cable", "绳索面拉 后肩 肩后束 rear delt"],
+ triceps: ["cable", "绳索下压 三头肌 三头推压"],
+ pallof: ["cable", "帕洛夫推 核心 抗旋转"],
+ legpress: ["machine", "斜板腿举 躺姿腿举 45度腿举 蹬腿 股四头肌"],
+ curl: ["machine", "坐姿勾腿 坐姿屈腿 腘绳肌 大腿后侧 hamstring"],
+ step: ["bodyweight", "登台阶 单腿 臀腿", "perHand"],
+ calf: ["machine", "小腿 站姿提踵 calf"],
+ squat: ["dumbbell", "箱式深蹲 箱蹲 杯式深蹲", "single"],
+ bridge: ["bodyweight", "臀桥 臀大肌 glutes"],
+ dead: ["bodyweight", "仰卧死虫 腹肌"],
+ bird: ["bodyweight", "四点支撑 对侧伸展"],
+ side: ["bodyweight", "侧平板 腹斜肌"],
+ brace: ["bodyweight", "腹部收紧 核心"],
+ angel: ["bodyweight", "靠墙滑手 肩胛"],
+ chin: ["bodyweight", "下巴回收 颈部"],
+ cat: ["bodyweight", "猫式 牛式 脊柱活动"],
+ hip: ["bodyweight", "半跪髋屈肌拉伸 髋部"],
+ book: ["bodyweight", "开书式 胸椎旋转"],
+ postbike: ["cardio", "卧式单车 靠背自行车", "none"],
+ bike: ["cardio", "固定自行车 有氧", "none"],
+ lateral: ["dumbbell", "哑铃侧举 肩中束 肩部 delts"],
+ walk: ["bodyweight", "散步 步行"]
+};
+for(const [id,[gear,aliases,load=defaultLoads[gear]]] of Object.entries(existingExerciseInfo)){
+ exerciseInfo[id]={gear,aliases,load};
+}
+
+const addedExercises = {
+ machine: [
+  ["lyingcurl", "俯卧腿弯举", "Lying Leg Curl", "下肢", "俯卧腿弯举机", "趴稳，膝盖对齐转轴，滚垫放在脚踝上方。保持髋部贴垫，屈膝后缓慢放回。", "坐姿腿弯举", "10–12", "趴着 躺着勾腿 躺姿 俯卧勾腿 俯卧屈腿 腘绳肌 大腿后侧 hamstring prone leg curl"],
+  ["standingcurl", "站姿单腿弯举", "Standing Single-Leg Curl", "下肢", "站姿腿弯举机", "扶稳支撑，保持骨盆朝前，用一侧腿屈膝，缓慢回位。", "俯卧腿弯举", "10–12/侧", "腘绳肌 大腿后侧 hamstring"],
+  ["legextension", "坐姿腿屈伸", "Leg Extension", "下肢", "腿屈伸机", "膝盖对齐转轴，伸膝后控制放下，避免踢起重量。", "腿举", "10–15", "伸腿 踢腿 股四头肌 大腿前侧 quads"],
+  ["horizontalpress", "坐姿水平腿举", "Horizontal Leg Press", "下肢", "水平腿举机", "脚掌踩稳，屈膝至腰臀仍贴靠垫的位置，再平稳推开。", "腿举", "8–12", "蹬腿 杠杆腿举 股四头肌"],
+  ["singlelegpress", "单腿腿举", "Single-Leg Press", "下肢", "腿举机", "从轻档开始，单脚踩稳，保持两侧骨盆贴垫。", "双腿腿举", "8–12/侧", "单腿蹬腿 quads"],
+  ["hacksquat", "哈克深蹲", "Hack Squat", "下肢", "哈克深蹲机", "脚掌压稳踏板，躯干贴靠垫，屈膝下蹲到可控深度。", "腿举", "8–12", "哈克蹲 股四头肌 quads"],
+  ["beltsquat", "腰带深蹲", "Belt Squat", "下肢", "腰带深蹲机", "固定腰带，脚掌踩稳，膝盖沿脚尖方向蹲起。", "哈克深蹲", "8–12", "深蹲 大腿前侧"],
+  ["hipabduction", "坐姿髋外展", "Hip Abduction Machine", "下肢", "髋外展机", "坐稳，让双膝向外打开，控制回程。", "站姿绳索髋外展", "12–15", "髋外展 臀中肌 臀部 外侧 abductor"],
+  ["hipadduction", "坐姿髋内收", "Hip Adduction Machine", "下肢", "髋内收机", "从舒适张开幅度开始，收拢双腿，再慢慢回位。", "站姿绳索髋内收", "12–15", "夹腿 内侧 大腿内侧 adductor"],
+  ["machinehipthrust", "器械臀推", "Machine Hip Thrust", "下肢", "臀推机", "靠稳上背，用脚掌发力抬髋，顶端收臀，缓慢放下。", "双腿臀桥", "8–12", "臀桥 臀大肌 glute drive glutes"],
+  ["machineglutekick", "器械后踢腿", "Machine Glute Kickback", "下肢", "后踢腿机", "固定躯干，单腿向后推踏板，收臀后缓慢回位。", "绳索后踢腿", "12–15/侧", "臀大肌 臀部 glutes"],
+  ["seatedcalf", "坐姿提踵", "Seated Calf Raise", "下肢", "坐姿提踵机", "前脚掌踩稳踏板，抬高脚跟后再缓慢下降。", "站姿器械提踵", "12–15", "小腿 比目鱼肌 calf"],
+  ["standingcalf", "站姿器械提踵", "Standing Machine Calf Raise", "下肢", "站姿提踵机", "脚掌前侧踩稳，膝盖保持稳定，用小腿抬起脚跟。", "哑铃提踵", "12–15", "小腿 calf"],
+  ["machinechestpress", "坐姿器械推胸", "Machine Chest Press", "胸部", "推胸机", "调节座椅，使把手约在胸口高度，脚掌踩稳，推起后缓慢回收。", "哑铃卧推", "8–12", "坐姿推胸 胸推 chest press"],
+  ["machineinclinepress", "上斜器械推胸", "Incline Machine Chest Press", "胸部", "上斜推胸机", "上背贴垫，沿器械轨道朝前上方推，控制回程。", "上斜哑铃卧推", "8–12", "上胸 上斜胸推"],
+  ["machinedeclinepress", "下斜器械推胸", "Decline Machine Chest Press", "胸部", "下斜推胸机", "坐稳并握牢手柄，沿器械轨道推远，缓慢回到起点。", "高位向下绳索夹胸", "8–12", "下胸 下斜胸推"],
+  ["pecdeck", "蝴蝶机夹胸", "Pec Deck Fly", "胸部", "蝴蝶机", "手肘保持微屈，双臂在胸前合拢，慢慢打开到舒适范围。", "绳索夹胸", "10–15", "坐姿飞鸟 胸部 pec fly"],
+  ["machinelatpulldown", "器械高位下拉", "Lat Pulldown Machine", "背部", "高位下拉机", "坐稳并固定大腿，把杆拉向胸前上方，再控制放回。", "单臂绳索高位下拉", "8–12", "双手下拉 宽握 高位 背阔肌 lats"],
+  ["machinerow", "胸托器械划船", "Chest-Supported Machine Row", "背部", "胸托划船机", "胸贴靠垫，把肘拉向身体两侧，再缓慢伸直。", "上斜凳哑铃划船", "8–12", "坐姿器械划船 胸托划船 背阔肌"],
+  ["machinehighrow", "器械高位划船", "Machine High Row", "背部", "高位划船机", "胸口靠稳，从前上方把握把拉向身体两侧。", "坐姿绳索划船", "8–12", "高位下拉 划船 上背"],
+  ["tbarrow", "胸托 T 杆划船", "Chest-Supported T-Bar Row", "背部", "胸托 T 杆划船机", "胸贴垫，将把手拉向下胸，缓慢伸直手臂。", "胸托器械划船", "8–12", "T杠 T-bar 上背"],
+  ["assistpullup", "辅助引体向上", "Assisted Pull-Up", "背部", "辅助引体机", "选足够的辅助重量，踩稳或跪稳平台，拉起后慢慢下降。", "器械高位下拉", "6–10", "助力引体 背阔肌 assisted chin up", "assist"],
+  ["machinebackextension", "器械坐姿背伸", "Machine Back Extension", "背部", "坐姿背伸机", "固定坐姿，从舒适幅度回到直立，动作平稳。", "鸟狗式", "10–12", "腰背 背部伸展 lower back"],
+  ["machineshoulderpress", "器械肩推", "Machine Shoulder Press", "肩部", "肩推机", "靠背坐稳，把手从肩部附近推起，缓慢还原。", "坐姿哑铃肩推", "8–12", "坐姿推肩 肩上推 overhead press"],
+  ["machinelateral", "器械侧平举", "Machine Lateral Raise", "肩部", "侧平举机", "上臂抵稳垫子，肘向侧抬起，再缓慢放下。", "哑铃侧平举", "12–15", "肩中束 侧肩 delts"],
+  ["reversepecdeck", "反向蝴蝶机飞鸟", "Reverse Pec Deck", "肩背", "蝴蝶机 / 反向飞鸟机", "面向靠垫坐稳，肘保持微屈，手臂向两侧打开。", "哑铃反向飞鸟", "12–15", "后束 后肩反飞鸟 rear delt"],
+  ["machinebicep", "器械牧师凳弯举", "Machine Preacher Curl", "手臂", "二头弯举机", "上臂贴垫，屈肘拉起手柄，再控制还原。", "哑铃牧师凳弯举", "10–15", "二头肌 器械二头弯举 preacher"],
+  ["machinetriceps", "器械坐姿下压", "Seated Dip Machine", "手臂", "坐姿下压机", "坐稳，将把手向下推，控制肘屈曲回程。", "绳索三头下压", "10–12", "肱三头肌 器械双杠 triceps"],
+  ["assistdip", "辅助双杠臂屈伸", "Assisted Dip", "手臂", "辅助双杠机", "选足够的辅助重量，平稳下放到肩部舒适的位置，再推起。", "器械坐姿下压", "6–10", "双杠 助力 dip 胸部 肱三头肌", "assist"],
+  ["machinecrunch", "器械卷腹", "Ab Crunch Machine", "核心", "卷腹机", "调好座椅，呼气时用腹部带动躯干卷曲，缓慢舒展。", "绳索卷腹", "10–15", "腹直肌 腹肌 abs"],
+  ["torsorotation", "器械躯干旋转", "Torso Rotation Machine", "核心", "躯干旋转机", "选轻档，在可控的舒适范围内慢慢旋转，左右分开练。", "抗旋转推", "10–12/侧", "腹斜肌 转体 obliques"],
+  ["smithsquat", "史密斯深蹲", "Smith Machine Squat", "下肢", "史密斯机", "先设置安全挡位，双脚踩稳，在可控幅度内蹲起。", "哈克深蹲", "8–12", "smith 股四头肌"],
+  ["smithbench", "史密斯卧推", "Smith Machine Bench Press", "胸部", "史密斯机 / 平凳", "将凳子对准轨道，先设安全挡位，再控制放杠和推起。", "坐姿器械推胸", "8–12", "smith 史密斯平板卧推"],
+  ["smithincline", "史密斯上斜卧推", "Smith Machine Incline Bench Press", "胸部", "史密斯机 / 上斜凳", "调好凳位和安全挡位，使杠铃下放到上胸附近。", "上斜器械推胸", "8–12", "smith 上胸"],
+  ["smithhipthrust", "史密斯臀推", "Smith Machine Hip Thrust", "下肢", "史密斯机 / 凳 / 杠垫", "固定长凳并垫好杠铃，上背靠稳，伸髋后控制放下。", "器械臀推", "8–12", "smith 臀部"],
+  ["smithrdl", "史密斯罗马尼亚硬拉", "Smith Machine Romanian Deadlift", "下肢", "史密斯机", "膝微屈、臀部往后，杠沿轨迹下降到后侧张力清楚的位置。", "哑铃罗马尼亚硬拉", "8–12", "smith 大腿后侧 腘绳肌 rdl"]
+ ],
+ dumbbell: [
+  ["dbincline", "上斜哑铃卧推", "Incline Dumbbell Press", "胸部", "哑铃 / 上斜凳", "上背贴凳，双脚踩稳，从胸侧向上推，缓慢下放。", "上斜器械推胸", "8–12", "上胸 incline bench"],
+  ["dbdecline", "下斜哑铃卧推", "Decline Dumbbell Press", "胸部", "哑铃 / 下斜凳", "使用能固定双脚的凳子，稳住哑铃后再开始推举。", "下斜器械推胸", "8–12", "下胸 decline bench"],
+  ["dbfloorpress", "哑铃地板卧推", "Dumbbell Floor Press", "胸部", "哑铃 / 垫", "仰卧屈膝，手肘轻触地面后推起，避免反弹。", "哑铃卧推", "8–12", "地板推 地板卧推"],
+  ["dbfly", "哑铃飞鸟", "Dumbbell Chest Fly", "胸部", "哑铃 / 平凳", "肘微屈，双臂缓慢打开到舒适幅度，再向胸前合拢。", "蝴蝶机夹胸", "10–15", "平板飞鸟 夹胸"],
+  ["dbpullover", "哑铃上拉", "Dumbbell Pullover", "背部", "单只哑铃 / 平凳", "双手握一只哑铃，手臂微弯向头后移动，再沿原路返回。", "绳索直臂下压", "10–12", "仰卧上拉 背阔肌 胸部", "single"],
+  ["dbonerow", "单臂哑铃划船", "One-Arm Dumbbell Row", "背部", "哑铃 / 平凳", "用空手扶凳，保持躯干稳定，将肘拉向髋部。", "胸托器械划船", "8–12/侧", "单手划船 背阔肌"],
+  ["dbbentrow", "俯身双哑铃划船", "Bent-Over Dumbbell Row", "背部", "哑铃", "屈髋俯身保持躯干稳定，两侧肘一起向后拉。", "上斜凳哑铃划船", "8–12", "俯身划船 上背"],
+  ["dbshrug", "哑铃耸肩", "Dumbbell Shrug", "肩背", "哑铃", "双手垂在身体两侧，肩膀垂直向上抬后慢慢放下。", "器械高位划船", "10–15", "斜方肌 traps"],
+  ["dbarnold", "阿诺德推举", "Arnold Press", "肩部", "哑铃 / 靠背凳", "从掌心朝向脸部开始，推起过程中自然转动手掌。", "坐姿哑铃肩推", "8–12", "肩推 肩部"],
+  ["dbfrontraise", "哑铃前平举", "Dumbbell Front Raise", "肩部", "哑铃", "肘微屈，把哑铃向前抬到舒适高度，控制下放。", "绳索前平举", "10–15", "前三角肌 肩前束"],
+  ["dbrearfly", "哑铃反向飞鸟", "Dumbbell Reverse Fly", "肩背", "哑铃 / 上斜凳", "胸部贴凳或稳住俯身姿势，肘微屈向两侧打开。", "反向蝴蝶机飞鸟", "12–15", "俯身飞鸟 后肩 肩后束 rear delt"],
+  ["dbcurl", "哑铃二头弯举", "Dumbbell Biceps Curl", "手臂", "哑铃", "上臂保持在身体两侧，屈肘上举后缓慢下降。", "绳索二头弯举", "10–15", "二头肌 站姿弯举 肱二头肌"],
+  ["dbhammercurl", "哑铃锤式弯举", "Dumbbell Hammer Curl", "手臂", "哑铃", "掌心相对，手肘保持在身体两侧，缓慢屈伸。", "绳索锤式弯举", "10–15", "二头肌 肱肌 前臂"],
+  ["dbinclinecurl", "上斜哑铃弯举", "Incline Dumbbell Curl", "手臂", "哑铃 / 上斜凳", "靠凳让手臂自然垂下，尽量保持上臂位置，完成屈肘。", "哑铃二头弯举", "10–15", "二头肌 上斜弯举"],
+  ["dbpreachercurl", "哑铃牧师凳弯举", "Dumbbell Preacher Curl", "手臂", "哑铃 / 牧师凳", "上臂贴垫，用一只手平稳弯举，缓慢下放。", "器械牧师凳弯举", "10–15/侧", "二头肌 斜托弯举"],
+  ["dbconcentration", "哑铃集中弯举", "Dumbbell Concentration Curl", "手臂", "哑铃 / 平凳", "坐稳并将上臂靠在大腿内侧，缓慢屈伸肘。", "哑铃牧师凳弯举", "10–15/侧", "二头肌 专注弯举"],
+  ["dboverheadtri", "哑铃过顶三头伸展", "Dumbbell Overhead Triceps Extension", "手臂", "单只哑铃", "双手稳握哑铃，上臂朝上，屈肘下放后伸直。", "绳索过顶三头伸展", "10–15", "三头肌 颈后臂屈伸", "single"],
+  ["dblieskull", "仰卧哑铃臂屈伸", "Dumbbell Skull Crusher", "手臂", "哑铃 / 平凳", "仰卧稳住上臂，让哑铃在头部两侧下放，再伸肘。", "绳索三头下压", "10–15", "三头肌 仰卧三头伸展"],
+  ["dbkicktri", "哑铃三头后伸", "Dumbbell Triceps Kickback", "手臂", "哑铃 / 平凳", "扶稳凳子，上臂保持与躯干同向，只让前臂向后伸。", "绳索三头下压", "12–15/侧", "三头肌 俯身臂屈伸"],
+  ["dbgobletsquat", "高脚杯深蹲", "Dumbbell Goblet Squat", "下肢", "单只哑铃", "双手把哑铃抱在胸前，膝随脚尖，蹲到稳定可控的位置。", "高脚杯箱式深蹲", "8–12", "大腿前侧 杯式深蹲", "single"],
+  ["dbfrontsquat", "双哑铃前蹲", "Dumbbell Front Squat", "下肢", "哑铃", "将哑铃稳放在肩前，脚掌踩实后蹲起。", "高脚杯深蹲", "8–12", "哑铃深蹲 大腿前侧"],
+  ["dbrdl", "哑铃罗马尼亚硬拉", "Dumbbell Romanian Deadlift", "下肢", "哑铃", "膝微屈，臀部向后，哑铃靠近双腿，到后侧有张力时站起。", "俯卧腿弯举", "8–12", "rdl 臀部 大腿后侧 腘绳肌"],
+  ["dbsinglerdl", "单腿哑铃罗马尼亚硬拉", "Single-Leg Dumbbell Romanian Deadlift", "下肢", "哑铃", "用支撑腿屈髋，另一腿后伸，保持骨盆稳定。可扶稳支撑物。", "哑铃罗马尼亚硬拉", "8–10/侧", "rdl 单腿硬拉 大腿后侧 腘绳肌"],
+  ["dbbulgarian", "哑铃保加利亚分腿蹲", "Dumbbell Bulgarian Split Squat", "下肢", "哑铃 / 凳", "后脚放在稳定凳面，前脚全脚掌承重，控制下蹲。", "哑铃分腿蹲", "8–10/侧", "单腿蹲 保加利亚深蹲 臀腿"],
+  ["dbsplitsquat", "哑铃分腿蹲", "Dumbbell Split Squat", "下肢", "哑铃", "两脚前后站稳，垂直下蹲，前脚全脚掌发力站起。", "哑铃反向弓步", "8–12/侧", "静止弓步 臀腿"],
+  ["dbreverselunge", "哑铃反向弓步", "Dumbbell Reverse Lunge", "下肢", "哑铃", "单脚向后迈步，前脚踩稳，随后回到站姿。", "哑铃分腿蹲", "8–12/侧", "后撤箭步蹲 弓箭步 臀腿"],
+  ["dbwalkinglunge", "哑铃行走弓步", "Dumbbell Walking Lunge", "下肢", "哑铃", "向前迈到稳固位置，用前腿站起再换边。", "哑铃反向弓步", "8–12/侧", "走路箭步蹲 弓箭步 臀腿"],
+  ["dbstepup", "哑铃台阶蹬踏", "Dumbbell Step-Up", "下肢", "哑铃 / 稳固台阶", "用踩在台阶上的脚带动身体上台，再慢慢下来。", "低台阶蹬踏", "8–10/侧", "登台阶 单腿 臀腿"],
+  ["dbhipthrust", "哑铃臀推", "Dumbbell Hip Thrust", "下肢", "单只哑铃 / 长凳", "上背靠在固定长凳，哑铃稳放髋前，收臀抬髋后慢放。", "器械臀推", "10–15", "臀部 glute drive", "single"],
+  ["dbcalf", "哑铃提踵", "Dumbbell Calf Raise", "下肢", "哑铃 / 台阶", "站稳，双脚抬起脚跟，控制下降。需要时用空手扶稳。", "站姿器械提踵", "12–15", "小腿 站姿提踵 calf"],
+  ["dbfarmerscarry", "哑铃农夫走", "Dumbbell Farmer’s Carry", "核心", "哑铃", "两手提稳哑铃，躯干直立，用小步伐匀速行走。", "手提箱走", "20–40秒", "农夫行走 握力 全身 farmers walk"],
+  ["dbsuitcase", "哑铃手提箱走", "Dumbbell Suitcase Carry", "核心", "单只哑铃", "单手提哑铃，保持肩髋水平，走完一趟换手。", "抗旋转推", "20–40秒/侧", "单手农夫走 核心 握力", "single"]
+ ],
+ cable: [
+  ["cableseatrow", "坐姿绳索划船", "Seated Cable Row", "背部", "低位龙门架 / 划船把", "坐稳，肘向后拉，把手靠近腹部，控制手臂伸直。", "胸托器械划船", "8–12", "低位划船 背阔肌"],
+  ["cableonerow", "单臂绳索划船", "Single-Arm Cable Row", "背部", "龙门架 / 单手柄", "稳住肩和骨盆，肘靠近体侧往后拉，每侧分别练习。", "单臂哑铃划船", "8–12/侧", "单手划船 背阔肌"],
+  ["cablehighrow", "高位绳索划船", "High Cable Row", "背部", "高位龙门架 / 双手柄", "从前上方向胸侧拉，肩膀远离耳朵，慢慢还原。", "器械高位划船", "8–12", "上背 高拉划船"],
+  ["cablelatwide", "宽握绳索下拉", "Wide-Grip Cable Lat Pulldown", "背部", "高位龙门架 / 长杆", "坐稳，双手略宽于肩，把杆拉向胸前再缓慢抬回。", "器械高位下拉", "8–12", "双手下拉 高位下拉 背阔肌"],
+  ["cablelatclose", "窄握绳索下拉", "Close-Grip Cable Lat Pulldown", "背部", "高位龙门架 / V 形把", "双手握稳，肘朝肋骨方向拉下，再控制回程。", "器械高位下拉", "8–12", "窄握高位下拉 对握 背阔肌"],
+  ["cablestraightpulldown", "绳索直臂下压", "Straight-Arm Cable Pulldown", "背部", "高位龙门架 / 直杆或绳索", "手肘微屈并保持角度，把把手弧形拉到大腿前方。", "哑铃上拉", "10–15", "直臂下拉 背阔肌"],
+  ["cablepress", "站姿绳索推胸", "Standing Cable Chest Press", "胸部", "双边龙门架 / 手柄", "前后脚站稳，从胸侧把手推向前方，控制回收。", "坐姿器械推胸", "8–12", "龙门架胸推"],
+  ["cablefly", "中位绳索夹胸", "Cable Chest Fly", "胸部", "双边龙门架 / 手柄", "滑轮在胸部附近，肘微屈，两手在胸前合拢。", "蝴蝶机夹胸", "10–15", "绳索飞鸟 龙门架夹胸 crossover"],
+  ["cablehighfly", "高位向下绳索夹胸", "High-to-Low Cable Fly", "胸部", "双边龙门架 / 高位滑轮", "从两侧上方向前下方合拢，肩部保持放松。", "下斜器械推胸", "10–15", "高向低夹胸 下胸 crossover"],
+  ["cablelowfly", "低位向上绳索夹胸", "Low-to-High Cable Fly", "胸部", "双边龙门架 / 低位滑轮", "从两侧下方向前上方合拢，肘角度基本不变。", "上斜哑铃卧推", "10–15", "低向高夹胸 上胸 crossover"],
+  ["cablelateral", "单臂绳索侧平举", "Cable Lateral Raise", "肩部", "低位龙门架 / 单手柄", "身体站稳，肘微屈向侧面抬至舒适高度，再慢慢放下。", "哑铃侧平举", "12–15/侧", "肩中束 侧肩"],
+  ["cablefront", "绳索前平举", "Cable Front Raise", "肩部", "低位龙门架 / 单手柄", "保持躯干稳定，手臂向前抬至舒适高度。", "哑铃前平举", "10–15/侧", "肩前束"],
+  ["cablerearfly", "绳索反向飞鸟", "Cable Reverse Fly", "肩背", "双边龙门架 / 手柄", "肘微屈，把手从身体前方拉向两侧，缓慢还原。", "反向蝴蝶机飞鸟", "12–15", "肩后束 后肩 rear delt"],
+  ["cableexternalrotation", "绳索肩外旋", "Cable Shoulder External Rotation", "肩部", "龙门架 / 单手柄", "滑轮调到肘高，肘贴体侧，前臂缓慢向外转。", "弹力带肩外旋", "12–15/侧", "肩袖 rotator cuff 外旋"],
+  ["cablebicep", "绳索二头弯举", "Cable Biceps Curl", "手臂", "低位龙门架 / 直杆", "肘留在体侧，把杆弯举到可控位置后慢慢放下。", "哑铃二头弯举", "10–15", "二头肌", "total"],
+  ["cablebayesiancurl", "背向绳索单臂弯举", "Bayesian Cable Curl", "手臂", "低位龙门架 / 单手柄", "背对滑轮站稳，让上臂略在身体后方，平稳屈肘。", "上斜哑铃弯举", "10–15/侧", "贝叶斯弯举 二头肌"],
+  ["cablehammercurl", "绳索锤式弯举", "Cable Hammer Curl", "手臂", "低位龙门架 / 绳索", "掌心相对握绳，肘固定在身体两侧，缓慢弯举。", "哑铃锤式弯举", "10–15", "二头肌 前臂"],
+  ["cabletricepsbar", "直杆三头下压", "Straight-Bar Cable Pushdown", "手臂", "高位龙门架 / 直杆", "两肘靠体侧，用前臂将杆压下，缓慢回位。", "绳索三头下压", "10–15", "肱三头肌 三头下压"],
+  ["cabletricepssingle", "单臂绳索三头下压", "Single-Arm Cable Pushdown", "手臂", "高位龙门架 / 单手柄", "肘贴体侧，一侧一侧伸肘下压，肩部保持稳定。", "绳索三头下压", "10–15/侧", "单手下压 三头肌"],
+  ["cabletricepsoh", "绳索过顶三头伸展", "Overhead Cable Triceps Extension", "手臂", "龙门架 / 绳索", "背对滑轮稳住站姿，上臂靠近头部，用屈伸肘完成动作。", "哑铃过顶三头伸展", "10–15", "肱三头肌 过头臂屈伸"],
+  ["cablepullthrough", "绳索胯下拉", "Cable Pull-Through", "下肢", "低位龙门架 / 绳索", "背对滑轮从两腿之间握绳，屈髋后伸髋站起。", "哑铃罗马尼亚硬拉", "10–15", "臀部 大腿后侧 腘绳肌"],
+  ["cablekickback", "绳索后踢腿", "Cable Glute Kickback", "下肢", "低位龙门架 / 脚踝带", "扶稳架子，保持骨盆朝前，用臀部带动腿向后。", "器械后踢腿", "12–15/侧", "绳索臀后踢 臀大肌"],
+  ["cablehipabduction", "站姿绳索髋外展", "Cable Hip Abduction", "下肢", "低位龙门架 / 脚踝带", "扶稳支撑，外侧腿向旁边抬起，避免身体侧倾。", "坐姿髋外展", "12–15/侧", "臀中肌 臀部 外侧"],
+  ["cablehipadduction", "站姿绳索髋内收", "Cable Hip Adduction", "下肢", "低位龙门架 / 脚踝带", "扶稳支撑，靠近滑轮的腿向身体中线收回。", "坐姿髋内收", "12–15/侧", "大腿内侧 髋内收"],
+  ["cablelegcurl", "站姿绳索腿弯举", "Cable Leg Curl", "下肢", "低位龙门架 / 脚踝带", "面对滑轮扶稳，上腿尽量保持不动，屈膝后缓慢放回。", "俯卧腿弯举", "10–15/侧", "勾腿 腘绳肌 大腿后侧 hamstring"],
+  ["cablecrunch", "绳索卷腹", "Kneeling Cable Crunch", "核心", "高位龙门架 / 绳索 / 垫", "跪稳，上臂保持稳定，用腹部带动胸口向下卷曲。", "器械卷腹", "10–15", "跪姿卷腹 腹肌"],
+  ["cablechop", "高位向下绳索劈砍", "High-to-Low Cable Wood Chop", "核心", "高位龙门架 / 手柄", "侧站稳，两手把手柄从靠滑轮一侧的上方向对侧髋部带动。", "抗旋转推", "10–12/侧", "伐木式 转体 woodchop"],
+  ["cablelift", "低位向上绳索提拉", "Low-to-High Cable Lift", "核心", "低位龙门架 / 手柄", "侧站稳，用双手从近端髋部斜向上提拉，控制回程。", "抗旋转推", "10–12/侧", "绳索斜向上提 转体 woodchop"]
+ ],
+ barbell: [
+  ["bbsquat", "杠铃背蹲", "Barbell Back Squat", "下肢", "杠铃 / 深蹲架", "设置安全杠，肩背托稳杠铃，脚掌踩稳后蹲起。", "哈克深蹲", "6–10", "自由深蹲 股四头肌"],
+  ["bbfrontsquat", "杠铃前蹲", "Barbell Front Squat", "下肢", "杠铃 / 深蹲架", "将杠铃稳放肩前，肘朝前抬，保持稳定后蹲起。", "双哑铃前蹲", "6–10", "前架深蹲 股四头肌"],
+  ["bbdeadlift", "杠铃传统硬拉", "Barbell Conventional Deadlift", "下肢", "杠铃 / 杠铃片", "杠靠近小腿，屈髋屈膝抓稳杠，脚踩地面后站起。", "杠铃罗马尼亚硬拉", "5–8", "传统硬拉 臀腿"],
+  ["bbrdl", "杠铃罗马尼亚硬拉", "Barbell Romanian Deadlift", "下肢", "杠铃", "微屈膝，臀部往后移动，杠贴近双腿，再伸髋站直。", "哑铃罗马尼亚硬拉", "8–12", "rdl 大腿后侧 腘绳肌"],
+  ["bbhipthrust", "杠铃臀推", "Barbell Hip Thrust", "下肢", "杠铃 / 固定长凳 / 杠垫", "上背靠稳，杠铃垫在髋前，收臀抬髋后控制下放。", "器械臀推", "8–12", "臀大肌 glutes"],
+  ["bbbench", "杠铃卧推", "Barbell Bench Press", "胸部", "杠铃 / 平凳 / 卧推架", "设好保护杆或找人保护，稳住肩背和双脚，再下放与推起。", "坐姿器械推胸", "6–10", "平板卧推 胸肌"],
+  ["bbincline", "杠铃上斜卧推", "Incline Barbell Bench Press", "胸部", "杠铃 / 上斜凳", "设好保护挡位，肩背贴凳，将杠缓慢下放至上胸附近。", "上斜哑铃卧推", "6–10", "上胸"],
+  ["bbrow", "俯身杠铃划船", "Bent-Over Barbell Row", "背部", "杠铃", "屈髋并稳住躯干，向后拉肘把杠拉向腹部。", "胸托器械划船", "8–12", "杠铃划船 上背"],
+  ["bboverhead", "站姿杠铃推举", "Standing Barbell Overhead Press", "肩部", "杠铃 / 深蹲架", "胸前握稳杠铃，站稳后向上推，缓慢落回肩前。", "器械肩推", "6–10", "杠铃肩推 军事推举"],
+  ["bbcurl", "杠铃二头弯举", "Barbell Biceps Curl", "手臂", "杠铃或 EZ 杆", "肘留在体侧，避免用身体摆动把杠抬起。", "哑铃二头弯举", "10–15", "EZ杆 曲杆弯举 biceps"]
+ ],
+ bodyweight: [
+  ["pullup", "引体向上", "Pull-Up", "背部", "引体向上杆", "握稳横杆，向下带动肩和肘拉起身体，再控制下降。", "辅助引体向上", "5–10", "正手引体 背阔肌"],
+  ["chinup", "反手引体向上", "Chin-Up", "背部", "引体向上杆", "掌心朝向自己，收紧身体后拉起，再缓慢下降。", "辅助引体向上", "5–10", "反握引体 二头肌"],
+  ["pushup", "俯卧撑", "Push-Up", "胸部", "无器械", "身体保持直线，弯肘下放，再把地面推远。", "斜板俯卧撑", "8–15", "胸肌 自重"],
+  ["inclinepushup", "斜板俯卧撑", "Incline Push-Up", "胸部", "固定长凳或杠", "双手撑在稳固高处，保持身体直线，屈伸肘完成。", "俯卧撑", "8–15", "高位俯卧撑"],
+  ["dip", "双杠臂屈伸", "Parallel-Bar Dip", "手臂", "双杠", "握稳双杠，缓慢下放到肩部舒适的位置，再推起。", "辅助双杠臂屈伸", "6–12", "三头肌 胸部"],
+  ["plank", "前臂平板支撑", "Forearm Plank", "核心", "瑜伽垫", "肘位于肩下，保持躯干平稳，持续自然呼吸。", "屈膝侧桥", "20–40秒", "腹肌"],
+  ["sidelong", "直腿侧桥", "Side Plank", "核心", "瑜伽垫", "肘在肩下，双腿伸直，抬髋使肩髋与脚成一线。", "屈膝侧桥", "15–30秒/侧", "侧平板支撑 腹斜肌"],
+  ["hangingkneeraise", "悬垂提膝", "Hanging Knee Raise", "核心", "引体向上杆或抬腿架", "握稳或撑稳，缓慢抬起屈膝的双腿，避免前后摆动。", "死虫式", "8–12", "吊杠举腿 下腹"],
+  ["benchbackextension", "罗马椅背伸", "45-Degree Back Extension", "背部", "罗马椅", "调整靠垫位置让髋能自由活动，屈髋后抬至躯干与双腿成直线。", "鸟狗式", "10–15", "挺身 山羊挺身 腰背"]
+ ]
+};
+for(const [gear,rows] of Object.entries(addedExercises)){
+ for(const [id,name,english,muscle,equipment,cue,alternative,reps,aliases,load=defaultLoads[gear]] of rows){
+  E[id]=[name,english,muscle,equipment,cue,alternative,muscle==='核心'?2:3,reps];
+  exerciseInfo[id]={gear,aliases,load};
+ }
+}
+const exerciseEntries=Object.entries(E);
+const exerciseMuscles=[...new Set(exerciseEntries.map(([,exercise])=>exercise[2]))];
+const weightLabels={perHand:'每手 lb', single:'单只哑铃 lb', assist:'辅助重量 lb'};
+const exercisePickerFilters=new Map();
+
+function normalizeExerciseSearch(value){
+ return value.toLowerCase().normalize('NFKC').replace(/[’']/g,'').replace(/[–—\/−-]/g,' ');
+}
+const exerciseSearchText=Object.fromEntries(exerciseEntries.map(([id,exercise])=>[
+ id,normalizeExerciseSearch([exercise[0],exercise[1],exercise[2],exercise[3],equipmentLabels[exerciseInfo[id].gear],exerciseInfo[id].aliases].join(' '))
+]));
+function exerciseSearchTerms(query){
+ return normalizeExerciseSearch(query).trim().split(/\s+/).filter(Boolean);
+}
+function matchesExercise(id,terms,gear){
+ return (gear==='all'||exerciseInfo[id].gear===gear)&&terms.every(term=>exerciseSearchText[id].includes(term));
+}
+function equipmentOptions(gear){
+ return '<option value="all">全部器材</option>'+Object.entries(equipmentLabels).map(([id,label])=>
+  `<option value="${id}"${id===gear?' selected':''}>${label}</option>`
+ ).join('');
+}
+
+const labels={gym:'健身',basket:'篮球',golf:'高尔夫',swim:'游泳',rest:'休息',recovery:'轻活动'},days=['周一','周二','周三','周四','周五','周六','周日'];const KEY='court-course-planner-v1';const seed=monday(currentDate());let storageOK=true;let data;try{data=JSON.parse(localStorage.getItem(KEY)||'null')}catch(e){storageOK=false}if(!data||!data.weeks)data={current:seed,weeks:{},profile:{weight:'',height:'',sets:3,pain:'none',equipment:'full'}};let tab='week',libSearch='',libCat='all',libGear='all',selectedPlanDate=null;const $=s=>document.querySelector(s),esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 function dayAdd(s,n){const d=new Date(s+'T12:00:00');d.setDate(d.getDate()+n);return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`}function monday(s){const d=new Date(s+'T12:00:00');return dayAdd(s,-((d.getDay()+6)%7))}function currentDate(){let d=new Date();return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`}function blank(){return Array.from({length:7},()=>['rest'])}function ensure(s){if(!data.weeks[s])data.weeks[s]={schedule:blank(),logs:{},notes:{},generated:null};return data.weeks[s]}let W=()=>ensure(data.current);function save(){try{localStorage.setItem(KEY,JSON.stringify(data))}catch(e){storageOK=false}}function toast(s){const t=$('#toast');t.textContent=s;t.classList.remove('hidden');clearTimeout(toast.t);toast.t=setTimeout(()=>t.classList.add('hidden'),2200)}function switchTab(t){tab=t;document.querySelectorAll('.view').forEach(x=>x.classList.toggle('hidden',x.id!==t));document.querySelectorAll('#nav button').forEach(x=>x.classList.toggle('active',x.dataset.tab===t));render()}function goWeek(s){data.current=monday(s);ensure(data.current);save();render()}
 function toggleDay(i,k){let a=W().schedule[i];if(a.includes(k)){a=a.filter(x=>x!==k)}else if(k==='rest'){a=['rest']}else{a=a.filter(x=>x!=='rest');a.push(k)}W().schedule[i]=a.length?a:['rest'];W().generated=null;save();render()}
 function getPreviousActivities(){const p=data.weeks[dayAdd(data.current,-7)];return p?p.schedule[6]:[]}
@@ -87,12 +291,51 @@ function regenerate(){W().generated=gen();save();switchTab('plan');toast('已更
 function startEdit(i){let e=savedEdit(i);if(e)return e;let g=autoPlan().days[i]?.gym;if(!g)return null;return {focus:own(FOCUS,g.t)?g.t:'custom',ex:g.ex.map(x=>({...x}))}}
 function commitEdit(i,e,refresh=true){if(!e)return;edits()[i]=e;save();if(refresh)renderPlan()}
 function changeFocus(i,focus){let e=startEdit(i);if(!e||!own(FOCUS,focus))return;let ids=FOCUS[focus][1];if(focus==='custom'){commitEdit(i,{...e,focus});return}if(!confirm('使用该部位的推荐动作替换当天清单？已有训练记录会保留。'))return;if(data.profile.equipment==='cable')ids=[...new Set(ids.map(x=>x==='legpress'?'squat':x==='curl'?'bridge':x==='bike'?'walk':x))];commitEdit(i,{focus,ex:ids.map(id=>exerciseDefault(id,focus))})}
-function editOptions(ex,selected){let used=new Set(ex.map(x=>x.id));return [...new Set(Object.values(E).map(a=>a[2]))].map(g=>'<optgroup label="'+esc(g)+'">'+Object.entries(E).filter(([id,a])=>a[2]===g&&(!used.has(id)||id===selected)).map(([id,a])=>'<option value="'+id+'" '+(id===selected?'selected':'')+'>'+esc(a[0]+' · '+a[1])+'</option>').join('')+'</optgroup>').join('')}
-function editorHTML(d){if(!d.gym)return '';let i=d.i,e=startEdit(i),opened=openEditors.has(editKey(i));if(!e)return '';let button='<div class="row" style="margin-top:8px"><button class="btn alt small" data-edit="toggle" data-i="'+i+'" aria-expanded="'+opened+'">'+(opened?'收起编辑':'编辑训练部位 / 动作')+'</button>'+(savedEdit(i)?'<span class="editlabel">已自定义</span>':'')+'</div>';if(!opened)return button;return button+'<div class="editor"><h3>编辑 '+days[i]+' 的健身计划</h3><p class="note">编辑即时保存。可换部位、增删替换动作、调整组数与次数。已打卡记录不会删除。</p>'+(data.profile.pain==='flare'?'<div class="notice">症状加重期间显示自动恢复方案；编辑保留，状态恢复后应用。</div>':'')+'<div class="row focusrow"><select aria-label="训练部位" id="focus'+i+'">'+Object.entries(FOCUS).map(([k,v])=>'<option value="'+k+'" '+(e.focus===k?'selected':'')+'>'+esc(v[0])+'</option>').join('')+'</select><button class="btn alt small" data-edit="focus" data-i="'+i+'">应用部位</button></div>'+e.ex.map((x,j)=>'<div class="editrow"><div class="field"><label>动作 '+(j+1)+'</label><select aria-label="替换动作 '+(j+1)+'" data-editfield="swap" data-i="'+i+'" data-j="'+j+'">'+editOptions(e.ex,x.id)+'</select></div><div class="row"><div class="field"><label>组数</label><select aria-label="组数" data-editfield="sets" data-i="'+i+'" data-j="'+j+'">'+[1,2,3,4,5,6].map(n=>'<option '+(n===x.sets?'selected':'')+'>'+n+'</option>').join('')+'</select></div><div class="field"><label>目标次数 / 时间</label><input aria-label="目标次数或时间" type="text" maxlength="40" value="'+esc(x.reps)+'" data-editfield="reps" data-i="'+i+'" data-j="'+j+'"></div></div><div class="edit-actions"><button class="btn alt small" data-edit="up" data-i="'+i+'" data-j="'+j+'" '+(j===0?'disabled':'')+'>↑ 上移</button><button class="btn alt small" data-edit="down" data-i="'+i+'" data-j="'+j+'" '+(j===e.ex.length-1?'disabled':'')+'>↓ 下移</button><button class="btn alt small danger" data-edit="remove" data-i="'+i+'" data-j="'+j+'">移除</button></div></div>').join('')+'<div class="row addrow" style="margin-top:10px"><select id="add'+i+'" aria-label="选择要添加的动作"><option value="">选择动作（按肌群）</option>'+editOptions(e.ex)+'</select><button class="btn small" data-edit="add" data-i="'+i+'">添加动作</button></div><div class="edit-actions"><button class="btn alt small" data-edit="restore" data-i="'+i+'">恢复当天自动推荐</button><button class="btn small" data-edit="toggle" data-i="'+i+'">完成编辑</button></div></div>'}
+function editOptions(ex,selected='',filters={}){
+ const used=new Set(ex.map(x=>x.id));
+ const terms=exerciseSearchTerms(filters.query||'');
+ const gear=filters.gear||'all';
+ const groups=new Map();
+ for(const [id,a] of exerciseEntries){
+  if(id!==selected&&(used.has(id)||!matchesExercise(id,terms,gear)))continue;
+  if(!groups.has(a[2]))groups.set(a[2],[]);
+  groups.get(a[2]).push(`<option value="${id}"${id===selected?' selected':''}>${esc(a[0]+' · '+a[1])}</option>`);
+ }
+ return exerciseMuscles.filter(group=>groups.has(group)).map(group=>
+  `<optgroup label="${esc(group)}">${groups.get(group).join('')}</optgroup>`
+ ).join('');
+}
+function pickerOptions(ex,filters){
+ const options=editOptions(ex,'',filters);
+ return `<option value="">${options?'选择动作（按肌群）':'没有可添加的匹配动作'}</option>`+options;
+}
+function addExercisePicker(i,ex){
+ const filters=exercisePickerFilters.get(editKey(i))||{query:'',gear:'all'};
+ return `<section class="add-exercise" aria-labelledby="add-title${i}">
+  <h4 id="add-title${i}">添加动作</h4>
+  <div class="exercise-filters">
+   <input type="search" aria-label="搜索要添加的动作" placeholder="搜索动作、中英文或肌群" data-picker-filter="query" data-i="${i}" value="${esc(filters.query)}">
+   <select aria-label="筛选可添加动作的器材" data-picker-filter="gear" data-i="${i}">${equipmentOptions(filters.gear)}</select>
+  </div>
+  <div class="row addrow">
+   <select id="add${i}" aria-label="选择要添加的动作">${pickerOptions(ex,filters)}</select>
+   <button type="button" class="btn small" data-edit="add" data-i="${i}">添加动作</button>
+  </div>
+ </section>`;
+}
+function updateExercisePicker(input){
+ const i=Number(input.dataset.i),key=editKey(i);
+ const filters={query:'',gear:'all',...exercisePickerFilters.get(key),[input.dataset.pickerFilter]:input.value};
+ exercisePickerFilters.set(key,filters);
+ const select=$('#add'+i),selected=select.value;
+ select.innerHTML=pickerOptions(startEdit(i).ex,filters);
+ if(Array.from(select.options).some(option=>option.value===selected))select.value=selected;
+}
+function editorHTML(d){if(!d.gym)return '';let i=d.i,e=startEdit(i),opened=openEditors.has(editKey(i));if(!e)return '';let button='<div class="row" style="margin-top:8px"><button class="btn alt small" data-edit="toggle" data-i="'+i+'" aria-expanded="'+opened+'">'+(opened?'收起编辑':'编辑训练部位 / 动作')+'</button>'+(savedEdit(i)?'<span class="editlabel">已自定义</span>':'')+'</div>';if(!opened)return button;return button+'<div class="editor"><h3>编辑 '+days[i]+' 的健身计划</h3><p class="note">编辑即时保存。可换部位、增删替换动作、调整组数与次数。已打卡记录不会删除。</p>'+(data.profile.pain==='flare'?'<div class="notice">症状加重期间显示自动恢复方案；编辑保留，状态恢复后应用。</div>':'')+'<div class="row focusrow"><select aria-label="训练部位" id="focus'+i+'">'+Object.entries(FOCUS).map(([k,v])=>'<option value="'+k+'" '+(e.focus===k?'selected':'')+'>'+esc(v[0])+'</option>').join('')+'</select><button class="btn alt small" data-edit="focus" data-i="'+i+'">应用部位</button></div>'+e.ex.map((x,j)=>'<div class="editrow"><div class="field"><label>动作 '+(j+1)+'</label><select aria-label="替换动作 '+(j+1)+'" data-editfield="swap" data-i="'+i+'" data-j="'+j+'">'+editOptions(e.ex,x.id)+'</select></div><div class="row"><div class="field"><label>组数</label><select aria-label="组数" data-editfield="sets" data-i="'+i+'" data-j="'+j+'">'+[1,2,3,4,5,6].map(n=>'<option '+(n===x.sets?'selected':'')+'>'+n+'</option>').join('')+'</select></div><div class="field"><label>目标次数 / 时间</label><input aria-label="目标次数或时间" type="text" maxlength="40" value="'+esc(x.reps)+'" data-editfield="reps" data-i="'+i+'" data-j="'+j+'"></div></div><div class="edit-actions"><button class="btn alt small" data-edit="up" data-i="'+i+'" data-j="'+j+'" '+(j===0?'disabled':'')+'>↑ 上移</button><button class="btn alt small" data-edit="down" data-i="'+i+'" data-j="'+j+'" '+(j===e.ex.length-1?'disabled':'')+'>↓ 下移</button><button class="btn alt small danger" data-edit="remove" data-i="'+i+'" data-j="'+j+'">移除</button></div></div>').join('')+addExercisePicker(i,e.ex)+'<div class="edit-actions"><button class="btn alt small" data-edit="restore" data-i="'+i+'">恢复当天自动推荐</button><button class="btn small" data-edit="toggle" data-i="'+i+'">完成编辑</button></div></div>'}
 function handleEdit(b){let i=+b.dataset.i,j=+b.dataset.j,a=b.dataset.edit,k=editKey(i);if(!W().schedule[i]?.includes('gym'))return;if(a==='toggle'){if(openEditors.has(k))openEditors.delete(k);else openEditors.add(k);renderPlan();return}if(a==='restore'){if(confirm('恢复当天自动推荐？训练记录不会删除。')){delete edits()[i];save();renderPlan();toast('已恢复自动推荐')}return}if(a==='focus')return changeFocus(i,$('#focus'+i).value);let e=startEdit(i);if(!e)return;if(a==='add'){let id=$('#add'+i).value;if(!own(E,id)||e.ex.some(x=>x.id===id)){toast('请选择尚未添加的动作');return}e.ex.push(exerciseDefault(id,e.focus))}else if(a==='remove'){if(!e.ex[j])return;e.ex.splice(j,1)}else if(a==='up'||a==='down'){let to=j+(a==='up'?-1:1);if(!e.ex[j]||!e.ex[to])return;[e.ex[j],e.ex[to]]=[e.ex[to],e.ex[j]]}else return;commitEdit(i,e)}
 function editField(x){let i=+x.dataset.i,j=+x.dataset.j,e=startEdit(i);if(!e?.ex[j])return;let f=x.dataset.editfield;if(f==='swap'){let id=x.value;if(!own(E,id)||e.ex.some((v,k)=>k!==j&&v.id===id))return;e.ex[j]=exerciseDefault(id,e.focus)}else if(f==='sets'){let n=+x.value;if(!Number.isInteger(n)||n<1||n>6)return;e.ex[j].sets=n}else if(f==='reps'){e.ex[j].reps=x.value.slice(0,40);commitEdit(i,e,false);let dose=document.querySelector('[data-dose="'+i+':'+e.ex[j].id+'"]');if(dose&&data.profile.pain!=='flare')dose.textContent=e.ex[j].sets+'组 × '+e.ex[j].reps+' · '+E[e.ex[j].id][3];return}else return;commitEdit(i,e)}
 
-const weighted=new Set(['pulldown','row','bench','shoulder','face','triceps','pallof','legpress','curl','calf','squat','step','lateral']);
+const weighted=new Set(exerciseEntries.filter(([id])=>['total','perHand','single'].includes(exerciseInfo[id].load)).map(([id])=>id));
 const feedbackOptions={effort:[['','未填写'],['easy','轻松，还能做3次以上'],['ok','适中，还能做2次左右'],['hard','略吃力，还能做1次左右'],['limit','接近力竭 / 动作变形']],pain:[['','未填写'],['none','无不适或没有加重'],['mild','轻微不适，未加重'],['worse','疼痛明显加重 / 诱发疼痛'],['red','新发腿无力 / 会阴麻木 / 大小便异常']],fatigue:[['','未填写'],['low','恢复良好'],['medium','有些疲劳'],['high','明显疲劳 / 影响活动']]};
 function dailyFeedback(w,i){return w?.feedback?.[i]||{}}
 function exerciseFeedback(w,i,id){return w?.effort?.[i+':'+id]||''}
@@ -134,7 +377,7 @@ function daySetCounts(day){
 function weekView(){let s=W().schedule;let stats=['gym','basket','golf','swim'].map(k=>`<div class="stat"><strong>${s.filter(a=>a.includes(k)).length}</strong><small>${labels[k]}日</small></div>`).join('');$('#week').innerHTML=`<section class="panel"><div class="row between"><div><h2>设置本周日程</h2><div class="muted">${data.current} 至 ${dayAdd(data.current,6)}</div></div><div class="row"><button class="btn alt small" data-action="prev">‹ 上周</button><input aria-label="选择周" type="date" id="weekdate" value="${data.current}"><button class="btn alt small" data-action="next">下周 ›</button></div></div><div class="stats">${stats}</div><p class="note">点击每天的运动标签，可同时安排多个运动；选择休息会取消当天其他活动。</p><div class="week">${s.map((a,i)=>`<div class="day"><h3>${days[i]}</h3><div class="date">${fmt(dayAdd(data.current,i))}</div><div class="chips">${Object.entries(labels).map(([k,v])=>`<button aria-pressed="${a.includes(k)}" class="chip ${a.includes(k)?'on':''} ${k==='rest'?'rest':''}" data-day="${i}" data-kind="${k}">${v}</button>`).join('')}</div></div>`).join('')}</div><div class="row"><button class="btn" data-action="generate">生成 / 更新本周计划</button><button class="btn alt small" data-action="swap">高尔夫 → 游泳</button><button class="btn alt small" data-action="copyweek">沿用上周日程</button></div></section><section class="panel"><h2>训练偏好与状态</h2><div class="row"><div class="field"><label for="weight">体重 (lb)</label><input id="weight" type="number" min="60" max="500" value="${esc(data.profile.weight)}"></div><div class="field"><label for="pain">腰骶部当前状态</label><select id="pain"><option value="mild" ${data.profile.pain==='mild'?'selected':''}>轻微 / 稳定（1–3分）</option><option value="none" ${data.profile.pain==='none'?'selected':''}>目前无不适</option><option value="flare" ${data.profile.pain==='flare'?'selected':''}>近期加重 / 动作诱发疼痛</option></select></div><div class="field"><label for="equipment">可用器材</label><select id="equipment"><option value="full" ${data.profile.equipment==='full'?'selected':''}>龙门架 + 哑铃 + 器械</option><option value="cable" ${data.profile.equipment==='cable'?'selected':''}>龙门架 + 哑铃 + Bench</option></select></div><div class="field"><label for="sets">正式力量动作</label><select id="sets"><option value="3" ${data.profile.sets===3?'selected':''}>3组</option><option value="2" ${data.profile.sets===2?'selected':''}>2组（减量）</option></select></div></div><p class="note">目标：减脂保肌、篮球相对力量、肩背与腰盆控制。核心和恢复动作通常只安排1–2组。</p></section><section class="panel"><h2>计划预览</h2>${getPlan().days.map(d=>`<div class="row between history-item"><strong>${days[d.i]} · ${d.activities.map(x=>labels[x]).join(' + ')}</strong><span class="muted">${d.gym?d.gym.name:''}</span></div>`).join('')}${getPlan().warn.map(x=>`<div class="notice">${esc(x)}</div>`).join('')}<button class="btn alt" data-action="openplan">查看 / 编辑动作与打卡</button></section>`}
 const advice={basket:'动态热身8–10分钟；先投篮、运球，再逐步增加急停和对抗。若腰痛加重，降低强度。',golf:'热身5–10分钟，从短杆轻挥开始；连续两天打球时留意腰部和前臂疲劳。',swim:'轻至中等强度20–40分钟起步；自由泳或其他舒服泳姿，腰部不适时缩短时间或停止。',rest:'不做正式力量训练；可轻松散步，保持恢复。',recovery:'轻松步行或活动度练习10–25分钟，不追求疲劳。'};
 function bikeHTML(d,e){let l=getLog(d.i,'postbike',0),k=d.i+':postbike:0:';return '<div class="exercise"><div class="ename">训练后坐式单车 <span class="eng">Recumbent Stationary Bike</span></div><div class="dose">'+esc(e.reps)+'</div><p class="note">约300 kcal为器械估算；疲劳或疼痛时减量或跳过。</p><div class="setrow sethead"><span>完成</span><span>实际分钟</span><span>实际 kcal</span></div><div class="setrow"><label><input type="checkbox" aria-label="单车完成" data-log="'+k+'done" '+(l.done?'checked':'')+'>完成</label><input type="number" min="0" step="any" placeholder="30" aria-label="单车实际分钟" data-log="'+k+'reps" value="'+esc(l.reps)+'"><input type="number" min="0" step="any" placeholder="300" aria-label="单车实际千卡" data-log="'+k+'weight" value="'+esc(l.weight)+'"></div></div>'}
-function exerciseHTML(d,e){if(e.id==='postbike')return bikeHTML(d,e);let a=E[e.id],per=['shoulder','row','bench','squat','step','lateral'].includes(e.id);return `<div class="exercise"><div class="ename">${a[0]} <span class="eng">${a[1]}</span></div><div class="dose" data-dose="${d.i}:${e.id}">${e.sets}组 × ${esc(e.reps)} · ${esc(a[3])}</div>${recommendationHTML(d,e)}<details class="details"><summary>动作说明 / 替代动作</summary><p>${esc(a[4])}</p><p>替代：${esc(a[5])}（替代而非额外加练）</p></details><div class="setrow sethead"><span>完成</span><span>${per?'每手 lb':'重量 lb（自重留空）'}</span><span>实际次数 / 秒</span></div>${Array.from({length:e.sets},(_,j)=>{let l=getLog(d.i,e.id,j);return `<div class="setrow"><label><input type="checkbox" aria-label="${a[0]} 第${j+1}组" data-log="${d.i}:${e.id}:${j}:done" ${l.done?'checked':''}>${j+1}</label><input type="number" min="0" step="any" placeholder="—" aria-label="${a[0]} 第${j+1}组重量" data-log="${d.i}:${e.id}:${j}:weight" value="${esc(l.weight)}"><input type="text" inputmode="decimal" placeholder="${esc(e.reps)}" aria-label="${a[0]} 第${j+1}组实际次数" data-log="${d.i}:${e.id}:${j}:reps" value="${esc(l.reps)}"></div>`}).join('')}</div>`}
+function exerciseHTML(d,e){if(e.id==='postbike')return bikeHTML(d,e);let a=E[e.id],weightLabel=weightLabels[exerciseInfo[e.id].load]||'重量 lb（自重留空）';return `<div class="exercise"><div class="ename">${a[0]} <span class="eng">${a[1]}</span></div><div class="dose" data-dose="${d.i}:${e.id}">${e.sets}组 × ${esc(e.reps)} · ${esc(a[3])}</div>${recommendationHTML(d,e)}<details class="details"><summary>动作说明 / 替代动作</summary><p>${esc(a[4])}</p><p>替代：${esc(a[5])}（替代而非额外加练）</p></details><div class="setrow sethead"><span>完成</span><span>${weightLabel}</span><span>实际次数 / 秒</span></div>${Array.from({length:e.sets},(_,j)=>{let l=getLog(d.i,e.id,j);return `<div class="setrow"><label><input type="checkbox" aria-label="${a[0]} 第${j+1}组" data-log="${d.i}:${e.id}:${j}:done" ${l.done?'checked':''}>${j+1}</label><input type="number" min="0" step="any" placeholder="—" aria-label="${a[0]} 第${j+1}组重量" data-log="${d.i}:${e.id}:${j}:weight" value="${esc(l.weight)}"><input type="text" inputmode="decimal" placeholder="${esc(e.reps)}" aria-label="${a[0]} 第${j+1}组实际次数" data-log="${d.i}:${e.id}:${j}:reps" value="${esc(l.reps)}"></div>`}).join('')}</div>`}
 function renderPlan(){
  const plan=getPlan(),today=currentDate();
  const weekDates=days.map((_,i)=>dayAdd(data.current,i));
@@ -192,15 +435,37 @@ function selectPlanDay(button){
  renderPlan();
  $(`[data-plan-day="${index}"]`).focus({preventScroll:true});
 }
-function libraryView(){let cats=[...new Set(Object.values(E).map(x=>x[2]))];$('#library').innerHTML=`<section class="panel"><h2>动作库</h2><div class="row"><input type="search" id="searchlib" placeholder="搜索动作 / 英文名称" value="${esc(libSearch)}" style="flex:1"><select id="catlib"><option value="all">全部肌群</option>${cats.map(c=>`<option ${libCat===c?'selected':''}>${c}</option>`).join('')}</select></div><div id="libresults" class="library" style="margin-top:12px"></div></section>`;libraryResults()}
-function libraryResults(){let q=libSearch.toLowerCase();$('#libresults').innerHTML=Object.entries(E).filter(([id,a])=>(libCat==='all'||a[2]===libCat)&&a.join(' ').toLowerCase().includes(q)).map(([id,a])=>`<article><span class="tag">${esc(a[2])}</span><h3 style="margin-top:7px">${a[0]}</h3><div class="eng">${a[1]}</div><p class="dose">${a[6]}组 × ${a[7]}</p><p>${a[4]}</p><p class="note">器材：${a[3]} · 替代：${a[5]}</p></article>`).join('')||'<p>没有匹配动作。</p>'}
+function libraryView(){
+ $('#library').innerHTML=`<section class="panel">
+  <h2>动作库</h2>
+  <div class="exercise-filters">
+   <input type="search" id="searchlib" aria-label="搜索动作库" placeholder="搜索动作、中英文或肌群" value="${esc(libSearch)}">
+   <select id="catlib" aria-label="按肌群筛选"><option value="all">全部肌群</option>${exerciseMuscles.map(cat=>`<option value="${esc(cat)}"${libCat===cat?' selected':''}>${esc(cat)}</option>`).join('')}</select>
+   <select id="gearlib" aria-label="按器材筛选">${equipmentOptions(libGear)}</select>
+  </div>
+  <p class="note" id="libcount" role="status"></p>
+  <div id="libresults" class="library"></div>
+ </section>`;
+ libraryResults();
+}
+function libraryResults(){
+ const terms=exerciseSearchTerms(libSearch);
+ const results=exerciseEntries.filter(([id,a])=>(libCat==='all'||a[2]===libCat)&&matchesExercise(id,terms,libGear));
+ $('#libcount').textContent=`${results.length} 个动作`;
+ $('#libresults').innerHTML=results.map(([,a])=>`<article>
+  <span class="tag">${esc(a[2])}</span>
+  <h3 style="margin-top:7px">${esc(a[0])}</h3><div class="eng">${esc(a[1])}</div>
+  <p class="dose">${a[6]}组 × ${esc(a[7])}</p>
+  <p>${esc(a[4])}</p><p class="note">器材：${esc(a[3])} · 替代：${esc(a[5])}</p>
+ </article>`).join('')||'<p>没有匹配动作。</p>';
+}
 function historyView(){let keys=Object.keys(data.weeks).sort().reverse();$('#history').innerHTML=`<section class="panel"><h2>历史训练周</h2>${keys.map(k=>`<div class="row between history-item"><div><strong>${k} — ${dayAdd(k,6)}</strong><div class="note">${data.weeks[k].schedule.filter(a=>a.includes('gym')).length}个健身日 · ${Object.values(data.weeks[k].logs||{}).filter(v=>v.done).length}组已打卡</div></div><button class="btn alt small" data-openweek="${k}">打开</button></div>`).join('')}</section><section class="panel"><h2>数据与备份</h2><p>${storageOK?'本页面尝试使用浏览器本地存储保存计划与记录。不同浏览器、设备或文件位置不会自动同步。':'当前环境可能禁止本地保存，请在离开页面前导出备份。'}</p><div class="row"><button class="btn" data-action="backup">导出 JSON 备份</button><button class="btn alt" data-action="import">导入备份</button><input type="file" id="importfile" accept="application/json,.json" class="hidden"></div><p class="note">导入将替换当前应用数据，操作前建议先备份。</p></section><section class="panel"><h2>训练原则</h2><p>每周力量训练可根据运动日程动态分配。减脂以适度热量缺口为主，蛋白质摄入量可根据体重、训练量和个人健康情况调整；不必在连续运动日严格限制碳水。久坐每30–45分钟起身活动几分钟。</p><p>本应用按本地规则分析训练反馈、推荐参考重量和调整后续计划，不提供实时 AI 推理、账号或云同步。出现腰骶部不适时不建议自行复位；动作应以舒适和次日恢复为依据。</p></section>`}
 function render(){ensure(data.current);if(tab==='week')weekView();if(tab==='plan')renderPlan();if(tab==='library')libraryView();if(tab==='history')historyView()}
 function download(name,content,type){let a=document.createElement('a'),url=URL.createObjectURL(new Blob([content],{type}));a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000)}
 function exportText(){let p=getPlan();let out=[`训练周 ${data.current} — ${dayAdd(data.current,6)}`];p.days.forEach(d=>{out.push(`${days[d.i]}：${d.activities.map(k=>labels[k]).join(' + ')} ${d.gym?.name||''}`);d.gym?.ex.forEach(e=>{let ls=Array.from({length:e.sets},(_,j)=>getLog(d.i,e.id,j));if(e.id==='postbike'){let v=ls[0];out.push('  训练后坐式单车 | '+(v.done?'完成':'未完成')+' '+(v.reps||'—')+' 分钟 / '+(v.weight||'—')+' kcal（估算）');return;}out.push(`  ${E[e.id][0]} ${e.sets}组×${e.reps} | `+ls.map((v,j)=>`第${j+1}组 ${v.done?'完成':'未完成'} ${v.weight||'—'} lb / ${v.reps||'未记实际次数'}`).join('；'))});let visible=new Set((d.gym?.ex||[]).flatMap(e=>Array.from({length:e.sets},(_,j)=>logKey(d.i,e.id,j))));Object.entries(W().logs).filter(([k,v])=>k.startsWith(d.i+':')&&!visible.has(k)&&v.done).forEach(([k,v])=>{let [,id,j]=k.split(':');if(E[id])out.push('  已移除 / 调整动作的历史记录：'+E[id][0]+' 第'+(+j+1)+'组 '+(v.weight||'—')+' lb / '+(v.reps||'未记实际次数'))});if(W().notes[d.i])out.push('  反馈：'+W().notes[d.i]);let f=dailyFeedback(W(),d.i);if(f.pain||f.fatigue)out.push('  状态：'+['pain','fatigue'].map(k=>feedbackOptions[k].find(x=>x[0]===f[k])?.[1]||'未填写').join(' / '));Object.entries(W().effort||{}).filter(([k])=>k.startsWith(d.i+':')).forEach(([k,v])=>{let id=k.split(':')[1];if(E[id]&&v)out.push('  '+E[id][0]+' 完成感受：'+(feedbackOptions.effort.find(x=>x[0]===v)?.[1]||''))})});download(`训练记录-${data.current}.txt`,out.join('\n'),'text/plain;charset=utf-8');if(navigator.clipboard?.writeText)navigator.clipboard.writeText(out.join('\n')).catch(()=>{});toast('训练记录已导出。')}
  document.addEventListener('click',e=>{let b=e.target.closest('button');if(!b)return;if(b.dataset.edit)return handleEdit(b);if(b.dataset.tab)return switchTab(b.dataset.tab);if(b.dataset.planDay!==undefined)return selectPlanDay(b);if(b.dataset.day!==undefined)return toggleDay(+b.dataset.day,b.dataset.kind);if(b.dataset.openweek){goWeek(b.dataset.openweek);return switchTab('week')}switch(b.dataset.action){case'useweights':useWeights(b);break;case'analyze':save();renderPlan();toast('已分析反馈并刷新后续建议');break;case'nextcoach':openNextCoach();break;case'prev':goWeek(dayAdd(data.current,-7));break;case'next':goWeek(dayAdd(data.current,7));break;case'generate':regenerate();break;case'openplan':switchTab('plan');break;case'swap':W().schedule=W().schedule.map(a=>[...new Set(a.map(x=>x==='golf'?'swim':x))]);W().generated=null;save();render();toast('本周高尔夫已替换为游泳');break;case'copyweek':{let p=data.weeks[dayAdd(data.current,-7)];if(!p){toast('尚无上周日程');break}if(confirm('沿用上周日程？当前训练记录会保留。')){W().schedule=p.schedule.map(a=>[...a]);W().generated=null;save();render()}}break;case'exporttext':exportText();break;case'backup':download('fitness-backup-'+data.current+'.json',JSON.stringify(data,null,2),'application/json');break;case'import':$('#importfile').click();break;}});
- document.addEventListener('change',async e=>{let x=e.target;if(x.dataset.effort){let w=W();(w.effort||(w.effort={}))[x.dataset.effort]=x.value;save();renderPlan();return}if(x.dataset.feedback){let [i,k]=x.dataset.feedback.split(':');let w=W(),f=w.feedback||(w.feedback={});(f[i]||(f[i]={}))[k]=x.value;save();renderPlan();return}if(x.dataset.editfield){if(x.dataset.editfield!=='reps')editField(x);return}if(x.id==='weekdate'&&x.value)return goWeek(x.value);if(['weight','pain','equipment','sets'].includes(x.id)){if(x.id==='weight'&&(+x.value<60||+x.value>500))return;data.profile[x.id]=['sets','weight'].includes(x.id)?+x.value:x.value;W().generated=null;save();render();return}if(x.dataset.log){let [i,id,j,f]=x.dataset.log.split(':');return setLog(+i,id,+j,f,f==='done'?x.checked:x.value)}if(x.id==='catlib'){libCat=x.value;libraryResults()}if(x.id==='importfile'&&x.files[0]){try{let d=JSON.parse(await x.files[0].text());if(!d.weeks||!d.profile||!/^\d{4}-\d{2}-\d{2}$/.test(d.current)||Object.values(d.weeks).some(w=>!Array.isArray(w.schedule)||w.schedule.length!==7||w.schedule.some(a=>!Array.isArray(a)||a.some(k=>!labels[k]))||!w.logs||!w.notes))throw Error();if(confirm('确定替换当前记录？')){data=d;Object.values(data.weeks).forEach(w=>w.generated=null);save();switchTab('week');toast('备份已导入')}}catch(err){toast('备份格式不正确，未导入。')}}});
- document.addEventListener('input',e=>{let x=e.target;if(x.dataset.editfield==='reps')return editField(x);if(x.id==='searchlib'){libSearch=x.value;libraryResults()}if(x.dataset.note!==undefined){W().notes[x.dataset.note]=x.value;save()}if(x.dataset.log&&x.type!=='checkbox'){let [i,id,j,f]=x.dataset.log.split(':');setLog(+i,id,+j,f,x.value)}});
+ document.addEventListener('change',async e=>{let x=e.target;if(x.dataset.pickerFilter==='gear')return updateExercisePicker(x);if(x.dataset.effort){let w=W();(w.effort||(w.effort={}))[x.dataset.effort]=x.value;save();renderPlan();return}if(x.dataset.feedback){let [i,k]=x.dataset.feedback.split(':');let w=W(),f=w.feedback||(w.feedback={});(f[i]||(f[i]={}))[k]=x.value;save();renderPlan();return}if(x.dataset.editfield){if(x.dataset.editfield!=='reps')editField(x);return}if(x.id==='weekdate'&&x.value)return goWeek(x.value);if(['weight','pain','equipment','sets'].includes(x.id)){if(x.id==='weight'&&(+x.value<60||+x.value>500))return;data.profile[x.id]=['sets','weight'].includes(x.id)?+x.value:x.value;W().generated=null;save();render();return}if(x.dataset.log){let [i,id,j,f]=x.dataset.log.split(':');return setLog(+i,id,+j,f,f==='done'?x.checked:x.value)}if(x.id==='catlib'){libCat=x.value;libraryResults()}if(x.id==='gearlib'){libGear=x.value;libraryResults()}if(x.id==='importfile'&&x.files[0]){try{let d=JSON.parse(await x.files[0].text());if(!d.weeks||!d.profile||!/^\d{4}-\d{2}-\d{2}$/.test(d.current)||Object.values(d.weeks).some(w=>!Array.isArray(w.schedule)||w.schedule.length!==7||w.schedule.some(a=>!Array.isArray(a)||a.some(k=>!labels[k]))||!w.logs||!w.notes))throw Error();if(confirm('确定替换当前记录？')){data=d;Object.values(data.weeks).forEach(w=>w.generated=null);save();switchTab('week');toast('备份已导入')}}catch(err){toast('备份格式不正确，未导入。')}}});
+ document.addEventListener('input',e=>{let x=e.target;if(x.dataset.pickerFilter==='query')return updateExercisePicker(x);if(x.dataset.editfield==='reps')return editField(x);if(x.id==='searchlib'){libSearch=x.value;libraryResults()}if(x.dataset.note!==undefined){W().notes[x.dataset.note]=x.value;save()}if(x.dataset.log&&x.type!=='checkbox'){let [i,id,j,f]=x.dataset.log.split(':');setLog(+i,id,+j,f,x.value)}});
 function repairChatDate(w,i,source,rows){let moved=0,kept=0;for(let [id,j,weight,reps,done] of rows){let src=logKey(source,id,+j-1),dst=logKey(i,id,+j-1),v=w.logs[src],old=w.logs[dst]||{};let matches=v&&String(v.weight??'')===weight&&(!reps||!v.reps||String(v.reps)===reps)&&!!v.done===(done==='1');if(matches){let conflict=(old.weight!==undefined&&old.weight!==''&&String(old.weight)!==weight)||(old.reps&&v.reps&&String(old.reps)!==String(v.reps));if(conflict){kept++;continue}w.logs[dst]={...v,...old,weight:old.weight||v.weight||weight,reps:old.reps||v.reps||reps,done:!!old.done||!!v.done};delete w.logs[src];moved++}else if(v&&(v.done||v.weight||v.reps)){kept++}}if(w.effort?.[source+':shoulder']==='hard'&&!w.logs[logKey(source,'shoulder',0)]?.done&&!w.logs[logKey(source,'shoulder',1)]?.done&&!w.logs[logKey(source,'shoulder',2)]?.done){w.effort[i+':shoulder']=w.effort[i+':shoulder']||'hard';delete w.effort[source+':shoulder']}return {moved,kept}}
 function importChatLog(){let h=new URLSearchParams(location.hash.slice(1));if(!h.has('trainingDate'))return;let date=h.get('trainingDate'),focus=h.get('focus'),raw=h.getAll('set');if(!/^\d{4}-\d{2}-\d{2}$/.test(date)||!Number.isFinite(new Date(date+'T12:00:00').getTime())||!raw.length||raw.length>50)return;let rows=raw.map(v=>v.split(','));if(rows.some(([id,j,weight,reps,done])=>!own(E,id)||!/^([1-6])$/.test(j)||!/^\d{0,4}(\.\d{1,2})?$/.test(weight)||!/^\d{0,3}$/.test(reps)||!['0','1'].includes(done)))return;let week=monday(date),i=Math.round((new Date(date+'T12:00:00')-new Date(week+'T12:00:00'))/86400000);if(i<0||i>6)return;let from=h.get('moveFrom'),source=from?Array.from({length:7},(_,j)=>dayAdd(week,j)).indexOf(from):-1,repair=source>=0&&source!==i;if(from&&!repair){alert('迁移日期无效');return}if(!confirm(repair?'将 '+from+' 误放的匹配打卡迁移至 '+date+'？不匹配的周二记录及原计划会保留，操作前自动保存本地备份。':'将 '+date+' 的聊天训练记录合并到此浏览器？已有打卡与反馈不会被覆盖。'))return;if(repair){try{localStorage.setItem(KEY+'-before-date-repair',JSON.stringify(data))}catch(e){alert('无法保存迁移前备份，未执行迁移。');return}}let w=ensure(week);w.logs=w.logs||{};w.notes=w.notes||{};w.edits=w.edits||{};let result=repair?repairChatDate(w,i,source,rows):null;w.schedule[i]=[...new Set([...w.schedule[i].filter(x=>x!=='rest'),'gym'])];w.generated=null;if(!w.edits[i]&&own(FOCUS,focus)&&focus!=='custom'){w.edits[i]={focus,ex:FOCUS[focus][1].map(id=>({id,sets:id==='postbike'?1:3,reps:E[id][7]}))}}for(let [id,j,weight,reps,done] of rows){let key=logKey(i,id,+j-1),old=w.logs[key]||{};w.logs[key]={...old,weight:old.weight!==undefined&&old.weight!==''?old.weight:weight,reps:old.reps!==undefined&&old.reps!==''?old.reps:reps,done:!!old.done||done==='1'}}let note=(h.get('note')||'').slice(0,500);if(note&&!String(w.notes[i]||'').includes(note))w.notes[i]=[w.notes[i],note].filter(Boolean).join('\n');let effort=h.get('effort');if(effort){let [id,v]=effort.split(',');if(own(E,id)&&feedbackOptions.effort.some(x=>x[0]===v)){w.effort=w.effort||{};if(!w.effort[i+':'+id])w.effort[i+':'+id]=v}}data.current=week;selectedPlanDate=date;save();if(storageOK){history.replaceState(null,'',location.pathname+location.search);toast(repair?'日期已纠正；迁移 '+result.moved+' 项，保留 '+result.kept+' 项不匹配或冲突记录':'聊天训练记录已合并')}else toast('本地保存不可用，请导出备份');switchTab('plan')}
 ensure(data.current);save();render();importChatLog();window.addEventListener('hashchange',importChatLog);
