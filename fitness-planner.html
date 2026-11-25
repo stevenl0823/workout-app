@@ -34,9 +34,12 @@
 .add-exercise .addrow{margin-top:8px}
 @media(max-width:460px){.exercise-filters input{flex-basis:100%}}
 .account-panel{max-width:620px;margin-inline:auto}
-.account-form{display:grid;justify-items:start;gap:12px;margin-top:15px}
-.account-form .field{width:100%}.account-form .field input{width:100%}
-</style><script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.78.0" crossorigin="anonymous" integrity="sha384-WinvaRoMKJRCGlRyxV3v+phrtvkW8UTtpu9dr/d8zjOQgdjsmwP6ui9ukRA1xI/+"></script></head><body><header><div class="eyebrow">COURT & COURSE · TRAINING LAB</div><h1>我的运动周计划</h1><p>篮球 · 健身 · 高尔夫 · 游泳 · 恢复</p></header><main><nav class="nav" id="nav"><button data-tab="week" class="active">每周日程</button><button data-tab="plan">训练打卡</button><button data-tab="library">动作库</button><button data-tab="history">历史与设置</button><button data-tab="account">账号</button></nav><div id="week" class="view"></div><div id="plan" class="view hidden"></div><div id="library" class="view hidden"></div><div id="history" class="view hidden"></div><div id="account" class="view hidden"></div><div class="footer">个人训练辅助工具 · 规则生成，不是医疗诊断或实时 AI 教练 · 登录后可跨设备同步，访客记录保存在当前浏览器。</div></main><div id="toast" class="toast hidden" role="status"></div><script>
+.account-actions{display:flex;flex-wrap:wrap;gap:10px;margin-top:15px}
+.google-btn{display:inline-flex;align-items:center;justify-content:center;gap:10px;background:#fff;color:var(--ink);border:1px solid #cdd9d1;padding:10px 16px;border-radius:9px;font-weight:650;box-shadow:0 1px 2px #173b2514}
+.google-btn:hover:not(:disabled){background:#f7faf8;border-color:#9eb5a8}
+.google-btn:disabled{opacity:.5;cursor:default}
+.google-btn svg{width:18px;height:18px;flex:none}
+</style><script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.78.0/dist/umd/supabase.js" crossorigin="anonymous" integrity="sha384-Tt46HGzoyIA4g47SoX58ZZ8st1/DlqJJfKvWuUb+YXAx4xUp8qcPsvIieYFGp8LP"></script></head><body><header><div class="eyebrow">COURT & COURSE · TRAINING LAB</div><h1>我的运动周计划</h1><p>篮球 · 健身 · 高尔夫 · 游泳 · 恢复</p></header><main><nav class="nav" id="nav"><button data-tab="week" class="active">每周日程</button><button data-tab="plan">训练打卡</button><button data-tab="library">动作库</button><button data-tab="history">历史与设置</button><button data-tab="account">账号</button></nav><div id="week" class="view"></div><div id="plan" class="view hidden"></div><div id="library" class="view hidden"></div><div id="history" class="view hidden"></div><div id="account" class="view hidden"></div><div class="footer">个人训练辅助工具 · 规则生成，不是医疗诊断或实时 AI 教练 · 登录后可跨设备同步，访客记录保存在当前浏览器。</div></main><div id="toast" class="toast hidden" role="status"></div><script>
 'use strict';
 const E={
  pulldown:['单臂绳索高位下拉','Single-arm Cable Lat Pulldown','背部','龙门架 / 稳定坐姿','滑轮调高，肘向髋部下拉，躯干不后仰。左右各做规定次数。','器械高位下拉',3,'8–10/侧'],
@@ -474,17 +477,17 @@ function importChatLog(){let h=new URLSearchParams(location.hash.slice(1));if(!h
 
 const WORKOUT_CLOUD_URL = 'https://udtonpebadxxkevotzfh.supabase.co';
 const WORKOUT_PUBLISHABLE_KEY = "sb_publishable_ltgqiY5GXrGZzHDTnj7L0g_ovNhfqtu";
-const WORKOUT_SITE_URL = 'https://stevenl0823.github.io/workout-app/fitness-planner.html';
+const WORKOUT_SITE_URL = (location.hostname === 'localhost' || location.hostname === '127.0.0.1')
+ ? location.origin + location.pathname
+ : 'https://stevenl0823.github.io/workout-app/fitness-planner.html';
 let syncClient = null;
 let syncAccount = null;
 let syncMessage = '此浏览器中的训练记录';
-const LOGIN_EMAIL_KEY=KEY+':pending-login-email';
-let loginEmail='';
-try { loginEmail=sessionStorage.getItem(LOGIN_EMAIL_KEY)||''; } catch {}
-let loginStage=loginEmail?'verify':'request';
 let loginMessage = '';
 let loginBusy = false;
-const loginCallbackPending = new URLSearchParams(location.hash.slice(1)).has('access_token');
+const initialSearchParams = new URLSearchParams(location.search);
+const initialHashParams = new URLSearchParams(location.hash.slice(1));
+const loginCallbackPending = initialSearchParams.has('code') || initialHashParams.has('access_token');
 let syncTimer;
 let cloudRenderPending = false;
 
@@ -494,12 +497,6 @@ function newWorkoutData(current = monday(currentDate())) {
 function readWorkoutData(key) {
  try { return JSON.parse(localStorage.getItem(key)||'null'); }
  catch { return null; }
-}
-function savePendingLoginEmail(email) {
- try {
-  if(email)sessionStorage.setItem(LOGIN_EMAIL_KEY,email);
-  else sessionStorage.removeItem(LOGIN_EMAIL_KEY);
- }catch{}
 }
 function accountCacheKey(id) {
  return KEY+':account:'+id;
@@ -614,7 +611,8 @@ async function syncWorkouts() {
    return;
   }
   throw new Error('Concurrent workout edits');
- }catch{
+ }catch(error){
+  console.error('Workout sync failed:',error);
   if(syncAccount===account)updateWorkoutSyncStatus('暂未同步 · 修改保存在此浏览器，可重试');
  }finally{
   account.running=false;
@@ -625,12 +623,10 @@ function setWorkoutUser(user) {
  clearTimeout(syncTimer);
  if(user){
   const cached=readWorkoutData(accountCacheKey(user.id));
-  syncAccount={id:user.id,email:user.email,base:cached?.base||workoutSnapshot(newWorkoutData()),running:false};
+  syncAccount={id:user.id,email:user.email||user.user_metadata?.email||'Google 账号',base:cached?.base||workoutSnapshot(newWorkoutData()),running:false};
   data=cached?.data?.weeks?cached.data:newWorkoutData();
-  loginEmail='';
-  savePendingLoginEmail('');
   loginMessage='';
-  loginStage='request';
+  loginBusy=false;
   updateWorkoutSyncStatus('准备同步…');
  }else{
   syncAccount=null;
@@ -672,83 +668,41 @@ function workoutAccountView() {
   </section>`:''}`;
   return;
  }
+ const googleIcon=`<svg viewBox="0 0 18 18" aria-hidden="true"><path fill="#4285F4" d="M17.64 9.2c0-.64-.06-1.25-.16-1.84H9v3.48h4.84a4.14 4.14 0 0 1-1.8 2.72v2.26h2.92c1.7-1.57 2.68-3.88 2.68-6.62z"/><path fill="#34A853" d="M9 18c2.43 0 4.47-.8 5.96-2.18l-2.92-2.26c-.8.54-1.84.86-3.04.86-2.34 0-4.32-1.58-5.03-3.7H.96v2.33A9 9 0 0 0 9 18z"/><path fill="#FBBC05" d="M3.97 10.72A5.41 5.41 0 0 1 3.69 9c0-.6.1-1.18.28-1.72V4.95H.96A9 9 0 0 0 0 9c0 1.45.35 2.82.96 4.05l3.01-2.33z"/><path fill="#EA4335" d="M9 3.58c1.32 0 2.5.45 3.44 1.35l2.58-2.59C13.46.89 11.43 0 9 0A9 9 0 0 0 .96 4.95l3.01 2.33C4.68 5.16 6.66 3.58 9 3.58z"/></svg>`;
  $('#account').innerHTML=`<section class="panel account-panel">
-  <h2>Gmail 邮箱登录</h2>
-  <p class="note">在手机和电脑用同一个 Gmail 地址登录，即可同步训练计划和打卡。</p>
-  ${loginStage!=='request'?`<form id="workout-verify" class="account-form">
-   <p class="note">${loginEmail?`邮件发送给 ${esc(loginEmail)}。`:``}在要打卡的手机或电脑上打开最新邮件，点「Sign in」即可回到健身网站。每封邮件的链接只能使用一次。</p>
-   <details class="details" ${loginStage==='paste'?'open':''}><summary>想在当前浏览器完成登录？</summary><p>在 Gmail 长按尚未使用的「Sign in」，复制链接并粘贴到下方。</p><label class="field">登录链接<input name="verification" type="text" autocomplete="one-time-code" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="在这里粘贴登录链接" required></label>
-   <button class="btn" type="submit"${loginBusy?' disabled':''}>完成登录</button></details>
-   <button class="btn alt" type="button" data-sync-action="restart"${loginBusy?' disabled':''}>返回邮箱登录</button>
-  </form>`:`<form id="workout-email" class="account-form">
-   <label class="field">Gmail 地址<input name="email" type="email" autocomplete="email" autocapitalize="off" placeholder="name@gmail.com" value="${esc(loginEmail)}" required></label>
-   <div class="row"><button class="btn" type="submit"${loginBusy||!syncClient?' disabled':''}>发送登录邮件</button>
-   <button class="btn alt" type="button" data-sync-action="paste"${loginBusy||!syncClient?' disabled':''}>我已有登录链接</button></div>
-  </form>`}
-  <p class="note" role="status">${esc(loginMessage)}</p>
+  <h2>Google 账号登录</h2>
+  <p class="note">在手机和电脑的浏览器里用同一个 Gmail / Google 账号登录，即可自动同步训练计划和打卡。</p>
+  <div class="account-actions">
+   <button type="button" class="google-btn" data-sync-action="google"${loginBusy||!syncClient?' disabled':''}>${googleIcon}<span>${loginBusy?'正在跳转 Google…':'使用 Google 账号登录'}</span></button>
+  </div>
+  ${loginMessage?`<p class="note" role="status">${esc(loginMessage)}</p>`:''}
  </section>`;
 }
-function workoutEmailProof(input,email){
- const value=input.trim();
- if(/^\d{6,8}$/.test(value)){
-  if(!email)throw new Error('请先填写邮箱并发送登录邮件，再输入验证码。');
-  return {email,token:value,type:'email'};
- }
- let url;
- try {
-  url=new URL(value);
-  if(url.origin==='https://www.google.com'&&url.pathname==='/url'){
-   url=new URL(url.searchParams.get('q')||url.searchParams.get('url'));
-  }
- }catch{throw new Error('请粘贴健身 App 登录邮件中的完整链接。');}
- if(url.origin!==WORKOUT_CLOUD_URL||url.pathname!=='/auth/v1/verify')throw new Error('请粘贴健身 App 登录邮件中的链接。');
- const token_hash=url.searchParams.get('token');
- const type=url.searchParams.get('type');
- if(!token_hash||!['magiclink','signup','email'].includes(type))throw new Error('请粘贴完整的登录链接。');
- return {token_hash,type:'email'};
-}
-async function submitWorkoutAuth(event) {
- const form=event.target;
- if(!['workout-email','workout-verify'].includes(form.id))return;
- event.preventDefault();
+async function signInWithGoogle() {
  if(loginBusy||!syncClient)return;
- const fields=new FormData(form);
- const sending=form.id==='workout-email';
- if(!sending)loginStage='paste';
  loginBusy=true;
- loginMessage=sending?'正在发送…':'正在验证…';
+ loginMessage='正在前往 Google 登录…';
  workoutAccountView();
  try{
-  if(sending){
-   loginEmail=String(fields.get('email')).trim().toLowerCase();
-   if(!/^[^\s@]+@gmail\.com$/.test(loginEmail))throw new Error('请输入 Gmail 地址。');
-   const result=await syncClient.auth.signInWithOtp({email:loginEmail,options:{emailRedirectTo:WORKOUT_SITE_URL}});
-   if(result.error)throw new Error(result.error.status===429?'发信次数已达上限。若最新邮件的链接还没用过，可以直接点「Sign in」。也可稍后再申请。':'发送失败，请确认该 Gmail 是项目组织的邮箱，再试一次。');
-   savePendingLoginEmail(loginEmail);
-   loginStage='verify';
-  }else{
-   const proof=workoutEmailProof(String(fields.get('verification')),loginEmail);
-   const result=await syncClient.auth.verifyOtp(proof);
-   if(result.error||!result.data.user)throw new Error('登录链接或验证码未通过验证。请打开最新邮件。如果链接已经用过，可返回邮箱登录，申请新邮件。');
-   setWorkoutUser(result.data.user);
-  }
-  loginMessage='';
+  const {error}=await syncClient.auth.signInWithOAuth({
+   provider:'google',
+   options:{
+    redirectTo:WORKOUT_SITE_URL,
+    queryParams:{prompt:'select_account'}
+   }
+  });
+  if(error)throw error;
  }catch(error){
-  loginMessage=error.message||'暂时无法登录，请稍后重试。';
- }finally{
+  console.error('Google OAuth sign-in failed:',error);
   loginBusy=false;
+  loginMessage='无法启动 Google 登录：'+(error?.message||'请稍后重试。');
   if(tab==='account')workoutAccountView();
  }
 }
 async function handleWorkoutAccountAction(event){
  const action=event.target.closest('[data-sync-action]')?.dataset.syncAction;
+ if(action==='google')return signInWithGoogle();
  if(action==='sync')return syncWorkouts();
- if((action==='paste'||action==='restart')&&!loginBusy){
-  loginStage=action==='paste'?'paste':'request';
-  if(action==='restart')savePendingLoginEmail('');
-  loginMessage='';
-  workoutAccountView();
- }
  if(action==='migrate'&&syncAccount){
   const guest=readWorkoutData(KEY);
   if(guest?.weeks&&confirm('把此浏览器的旧计划和打卡合并到当前账号？'))mergeWorkoutBackup(guest);
@@ -765,14 +719,24 @@ function startWorkoutCloud(){
   if(tab==='account')workoutAccountView();
   return;
  }
- syncClient=window.supabase.createClient(WORKOUT_CLOUD_URL,WORKOUT_PUBLISHABLE_KEY,{auth:{flowType:'implicit'}});
+ syncClient=window.supabase.createClient(WORKOUT_CLOUD_URL,WORKOUT_PUBLISHABLE_KEY,{auth:{flowType:'pkce'}});
  if(loginCallbackPending){
-  syncClient.auth.getSession().then(({data:sessionData,error})=>{
-   if(error||!sessionData?.session){
-    loginStage='request';
-    loginMessage='登录未完成。请在浏览器里打开最新的登录邮件，或在此申请新邮件。';
-    if(tab==='account')workoutAccountView();
+  Promise.all([syncClient.auth.initialize(),syncClient.auth.getSession()]).then(([initResult,sessionResult])=>{
+   const session=sessionResult?.data?.session;
+   if(session?.user){
+    setWorkoutUser(session.user);
+    return;
    }
+   const err=initResult?.error||sessionResult?.error;
+   if(err)console.error('Supabase OAuth callback error:',err);
+   loginMessage=err?.message
+    ? `Google 登录未完成（${err.message}）。请重新点击登录。`
+    : 'Google 登录未完成，请重新点击「使用 Google 账号登录」。';
+   const cleanUrl=new URL(location.href);
+   cleanUrl.searchParams.delete('code');
+   if(initialHashParams.has('access_token'))cleanUrl.hash='';
+   history.replaceState(history.state,'',cleanUrl.pathname+cleanUrl.search+cleanUrl.hash);
+   if(tab==='account')workoutAccountView();
   });
  }
  syncClient.auth.onAuthStateChange((event,session)=>{
@@ -780,32 +744,44 @@ function startWorkoutCloud(){
    setTimeout(()=>setWorkoutUser(session?.user||null),0);
   }
  });
- document.addEventListener('submit',submitWorkoutAuth);
  document.addEventListener('click',handleWorkoutAccountAction);
  document.addEventListener('visibilitychange',()=>{if(!document.hidden)scheduleWorkoutSync(0);});
  document.addEventListener('focusout',()=>{
   if(cloudRenderPending)setTimeout(renderAfterCloudChange,0);
  });
  window.addEventListener('online',()=>scheduleWorkoutSync(0));
+ window.addEventListener('pageshow',event=>{
+  if(event.persisted&&loginBusy&&!syncAccount){
+   loginBusy=false;
+   loginMessage='';
+   if(tab==='account')workoutAccountView();
+  }
+ });
  setInterval(()=>{if(!document.hidden&&syncAccount)syncWorkouts();},20000);
  if(tab==='account')workoutAccountView();
 }
 
 ensure(data.current);save();render();importChatLog();window.addEventListener('hashchange',importChatLog);
-// Open the account view before the auth client consumes the callback fragment.
+// Open the account view before the auth client consumes OAuth callback parameters.
 {
- const hash = new URLSearchParams(location.hash.slice(1));
- const hasLoginError = hash.has('error') || hash.has('error_code');
- if (hasLoginError) {
-  loginStage = 'request';
-  loginMessage = hash.get('error_code') === 'otp_expired'
-   ? '这个登录链接已过期或已使用。请用下方邮箱申请一封新邮件，打开最新的「Sign in」。'
-   : '这次邮箱登录未完成。请用下方邮箱申请一封新邮件。';
-  history.replaceState(history.state, '', location.pathname + location.search);
- } else if (loginCallbackPending) {
-  loginMessage = '正在完成邮箱登录…';
+ const errorCode=initialSearchParams.get('error_code')||initialHashParams.get('error_code')||initialSearchParams.get('error')||initialHashParams.get('error');
+ const errorDesc=initialSearchParams.get('error_description')||initialHashParams.get('error_description');
+ const hasLoginError=Boolean(errorCode||errorDesc);
+ if(hasLoginError){
+  if(errorCode==='access_denied'){
+   loginMessage='已取消 Google 登录，可随时重试。';
+  }else{
+   const detail=[errorCode,errorDesc].filter(Boolean).join(': ');
+   loginMessage=detail?`Google 登录未完成（${detail}）。请重试。`:'Google 登录未完成，请重试。';
+  }
+  const cleanUrl=new URL(location.href);
+  for(const key of ['error','error_code','error_description'])cleanUrl.searchParams.delete(key);
+  if(initialHashParams.has('error')||initialHashParams.has('error_code')||initialHashParams.has('error_description'))cleanUrl.hash='';
+  history.replaceState(history.state,'',cleanUrl.pathname+cleanUrl.search+cleanUrl.hash);
+ }else if(loginCallbackPending){
+  loginMessage='正在完成 Google 登录…';
  }
- if (hasLoginError || loginCallbackPending || new URLSearchParams(location.search).get('view') === 'account') switchTab('account');
+ if(hasLoginError||loginCallbackPending||initialSearchParams.get('view')==='account')switchTab('account');
 }
 document.addEventListener('DOMContentLoaded',startWorkoutCloud);
 </script></body></html>
