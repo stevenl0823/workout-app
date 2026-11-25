@@ -478,8 +478,10 @@ const WORKOUT_SITE_URL = 'https://stevenl0823.github.io/workout-app/fitness-plan
 let syncClient = null;
 let syncAccount = null;
 let syncMessage = '此浏览器中的训练记录';
-let loginEmail = '';
-let loginStage = 'request';
+const LOGIN_EMAIL_KEY=KEY+':pending-login-email';
+let loginEmail='';
+try { loginEmail=sessionStorage.getItem(LOGIN_EMAIL_KEY)||''; } catch {}
+let loginStage=loginEmail?'verify':'request';
 let loginMessage = '';
 let loginBusy = false;
 let syncTimer;
@@ -491,6 +493,12 @@ function newWorkoutData(current = monday(currentDate())) {
 function readWorkoutData(key) {
  try { return JSON.parse(localStorage.getItem(key)||'null'); }
  catch { return null; }
+}
+function savePendingLoginEmail(email) {
+ try {
+  if(email)sessionStorage.setItem(LOGIN_EMAIL_KEY,email);
+  else sessionStorage.removeItem(LOGIN_EMAIL_KEY);
+ }catch{}
 }
 function accountCacheKey(id) {
  return KEY+':account:'+id;
@@ -619,6 +627,7 @@ function setWorkoutUser(user) {
   syncAccount={id:user.id,email:user.email,base:cached?.base||workoutSnapshot(newWorkoutData()),running:false};
   data=cached?.data?.weeks?cached.data:newWorkoutData();
   loginEmail='';
+  savePendingLoginEmail('');
   loginMessage='';
   loginStage='request';
   updateWorkoutSyncStatus('准备同步…');
@@ -666,21 +675,31 @@ function workoutAccountView() {
   <h2>Gmail 邮箱登录</h2>
   <p class="note">在手机和电脑用同一个 Gmail 地址登录，即可同步训练计划和打卡。</p>
   ${loginStage==='verify'?`<form id="workout-verify" class="account-form">
-   <p class="note">邮件发送给 ${esc(loginEmail)}。在 Gmail 中长按邮件里的登录按钮，复制链接后粘贴到下方。如果邮件显示验证码，也可以直接填验证码。</p>
-   <label class="field">登录链接或验证码<input name="verification" type="text" autocomplete="one-time-code" autocapitalize="off" required></label>
+   <p class="note">${loginEmail?`邮件发送给 ${esc(loginEmail)}。`:``}在 Gmail 里长按最新邮件的登录按钮，选「复制链接」，再粘贴到这里。点过的链接需要重新发送。</p>
+   <label class="field">登录链接或验证码<input name="verification" type="text" autocomplete="one-time-code" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="在这里粘贴登录链接" required></label>
    <div class="row"><button class="btn" type="submit"${loginBusy?' disabled':''}>完成登录</button>
-   <button class="btn alt" type="button" data-sync-action="restart">返回</button></div>
+   <button class="btn alt" type="button" data-sync-action="restart"${loginBusy?' disabled':''}>重新发送邮件</button></div>
   </form>`:`<form id="workout-email" class="account-form">
    <label class="field">Gmail 地址<input name="email" type="email" autocomplete="email" autocapitalize="off" placeholder="name@gmail.com" value="${esc(loginEmail)}" required></label>
-   <button class="btn" type="submit"${loginBusy||!syncClient?' disabled':''}>发送登录邮件</button>
+   <div class="row"><button class="btn" type="submit"${loginBusy||!syncClient?' disabled':''}>发送登录邮件</button>
+   <button class="btn alt" type="button" data-sync-action="paste"${loginBusy||!syncClient?' disabled':''}>我已有登录链接</button></div>
   </form>`}
   <p class="note" role="status">${esc(loginMessage)}</p>
  </section>`;
 }
 function workoutEmailProof(input,email){
  const value=input.trim();
- if(/^\d{6,8}$/.test(value))return {email,token:value,type:'email'};
- const url=new URL(value);
+ if(/^\d{6,8}$/.test(value)){
+  if(!email)throw new Error('请先填写邮箱并发送登录邮件，再输入验证码。');
+  return {email,token:value,type:'email'};
+ }
+ let url;
+ try {
+  url=new URL(value);
+  if(url.origin==='https://www.google.com'&&url.pathname==='/url'){
+   url=new URL(url.searchParams.get('q')||url.searchParams.get('url'));
+  }
+ }catch{throw new Error('请粘贴健身 App 登录邮件中的完整链接。');}
  if(url.origin!==WORKOUT_CLOUD_URL||url.pathname!=='/auth/v1/verify')throw new Error('请粘贴健身 App 登录邮件中的链接。');
  const token_hash=url.searchParams.get('token');
  const type=url.searchParams.get('type');
@@ -703,13 +722,12 @@ async function submitWorkoutAuth(event) {
    if(!/^[^\s@]+@gmail\.com$/.test(loginEmail))throw new Error('请输入 Gmail 地址。');
    const result=await syncClient.auth.signInWithOtp({email:loginEmail,options:{emailRedirectTo:WORKOUT_SITE_URL}});
    if(result.error)throw new Error(result.error.status===429?'发送太频繁，请稍后再试。':'发送失败，请确认该 Gmail 是项目组织的邮箱，再试一次。');
+   savePendingLoginEmail(loginEmail);
    loginStage='verify';
   }else{
-   let proof;
-   try{proof=workoutEmailProof(String(fields.get('verification')),loginEmail);}
-   catch{throw new Error('请输入邮件里的验证码，或粘贴完整的登录链接。');}
+   const proof=workoutEmailProof(String(fields.get('verification')),loginEmail);
    const result=await syncClient.auth.verifyOtp(proof);
-   if(result.error||!result.data.user)throw new Error('登录链接或验证码无效，也可能已使用。请返回并重新发送一封。');
+   if(result.error||!result.data.user)throw new Error('登录链接或验证码已失效。请点「重新发送邮件」，然后长按复制新链接。');
    setWorkoutUser(result.data.user);
   }
   loginMessage='';
@@ -723,8 +741,9 @@ async function submitWorkoutAuth(event) {
 async function handleWorkoutAccountAction(event){
  const action=event.target.closest('[data-sync-action]')?.dataset.syncAction;
  if(action==='sync')return syncWorkouts();
- if(action==='restart'){
-  loginStage='request';
+ if((action==='paste'||action==='restart')&&!loginBusy){
+  loginStage=action==='paste'?'verify':'request';
+  if(action==='restart')savePendingLoginEmail('');
   loginMessage='';
   workoutAccountView();
  }
@@ -762,5 +781,6 @@ function startWorkoutCloud(){
 }
 
 ensure(data.current);save();render();importChatLog();window.addEventListener('hashchange',importChatLog);
+if(new URLSearchParams(location.search).get('view')==='account')switchTab('account');
 document.addEventListener('DOMContentLoaded',startWorkoutCloud);
 </script></body></html>
