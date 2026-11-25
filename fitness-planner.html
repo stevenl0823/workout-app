@@ -578,14 +578,15 @@ async function syncWorkouts() {
    const row=read.data;
    const remote=row?.snapshot||workoutSnapshot(newWorkoutData());
    const sent=workoutSnapshot(data);
-   const desired=mergeWorkoutValues(account.base,sent,remote);
+   let desired=mergeWorkoutValues(account.base,sent,remote);
    if(!sameWorkoutValue(desired,remote)){
     const write=row
      ? await table().update({snapshot:desired,revision:row.revision+1,updated_at:new Date().toISOString()}).eq('user_id',account.id).eq('revision',row.revision).select('revision').maybeSingle()
-     : await table().insert({user_id:account.id,snapshot:desired}).select('revision').maybeSingle();
+     : await table().insert({user_id:account.id,snapshot:desired}).select('revision,snapshot').maybeSingle();
     if(syncAccount!==account)return;
     if(write.error?.code==='23505'||(!write.error&&!write.data))continue;
     if(write.error)throw write.error;
+    if(!row)desired=write.data.snapshot;
    }
    const latest=workoutSnapshot(data);
    const merged=mergeWorkoutValues(sent,latest,desired);
