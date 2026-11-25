@@ -33,7 +33,10 @@
 .add-exercise h4{font-size:14px;margin:0 0 7px}
 .add-exercise .addrow{margin-top:8px}
 @media(max-width:460px){.exercise-filters input{flex-basis:100%}}
-</style></head><body><header><div class="eyebrow">COURT & COURSE · TRAINING LAB</div><h1>我的运动周计划</h1><p>篮球 · 健身 · 高尔夫 · 游泳 · 恢复</p></header><main><nav class="nav" id="nav"><button data-tab="week" class="active">每周日程</button><button data-tab="plan">训练打卡</button><button data-tab="library">动作库</button><button data-tab="history">历史与设置</button></nav><div id="week" class="view"></div><div id="plan" class="view hidden"></div><div id="library" class="view hidden"></div><div id="history" class="view hidden"></div><div class="footer">个人训练辅助工具 · 规则生成，不是医疗诊断或实时 AI 教练 · 数据默认保存在当前浏览器，建议定期导出备份。</div></main><div id="toast" class="toast hidden" role="status"></div><script>
+.account-panel{max-width:620px;margin-inline:auto}
+.account-form{display:grid;justify-items:start;gap:12px;margin-top:15px}
+.account-form .field{width:100%}.account-form .field input{width:100%}
+</style><script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.78.0" crossorigin="anonymous" integrity="sha384-WinvaRoMKJRCGlRyxV3v+phrtvkW8UTtpu9dr/d8zjOQgdjsmwP6ui9ukRA1xI/+"></script></head><body><header><div class="eyebrow">COURT & COURSE · TRAINING LAB</div><h1>我的运动周计划</h1><p>篮球 · 健身 · 高尔夫 · 游泳 · 恢复</p></header><main><nav class="nav" id="nav"><button data-tab="week" class="active">每周日程</button><button data-tab="plan">训练打卡</button><button data-tab="library">动作库</button><button data-tab="history">历史与设置</button><button data-tab="account">账号</button></nav><div id="week" class="view"></div><div id="plan" class="view hidden"></div><div id="library" class="view hidden"></div><div id="history" class="view hidden"></div><div id="account" class="view hidden"></div><div class="footer">个人训练辅助工具 · 规则生成，不是医疗诊断或实时 AI 教练 · 登录后可跨设备同步，访客记录保存在当前浏览器。</div></main><div id="toast" class="toast hidden" role="status"></div><script>
 'use strict';
 const E={
  pulldown:['单臂绳索高位下拉','Single-arm Cable Lat Pulldown','背部','龙门架 / 稳定坐姿','滑轮调高，肘向髋部下拉，躯干不后仰。左右各做规定次数。','器械高位下拉',3,'8–10/侧'],
@@ -260,7 +263,7 @@ function equipmentOptions(gear){
 }
 
 const labels={gym:'健身',basket:'篮球',golf:'高尔夫',swim:'游泳',rest:'休息',recovery:'轻活动'},days=['周一','周二','周三','周四','周五','周六','周日'];const KEY='court-course-planner-v1';const seed=monday(currentDate());let storageOK=true;let data;try{data=JSON.parse(localStorage.getItem(KEY)||'null')}catch(e){storageOK=false}if(!data||!data.weeks)data={current:seed,weeks:{},profile:{weight:'',height:'',sets:3,pain:'none',equipment:'full'}};let tab='week',libSearch='',libCat='all',libGear='all',selectedPlanDate=null;const $=s=>document.querySelector(s),esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-function dayAdd(s,n){const d=new Date(s+'T12:00:00');d.setDate(d.getDate()+n);return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`}function monday(s){const d=new Date(s+'T12:00:00');return dayAdd(s,-((d.getDay()+6)%7))}function currentDate(){let d=new Date();return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`}function blank(){return Array.from({length:7},()=>['rest'])}function ensure(s){if(!data.weeks[s])data.weeks[s]={schedule:blank(),logs:{},notes:{},generated:null};return data.weeks[s]}let W=()=>ensure(data.current);function save(){try{localStorage.setItem(KEY,JSON.stringify(data))}catch(e){storageOK=false}}function toast(s){const t=$('#toast');t.textContent=s;t.classList.remove('hidden');clearTimeout(toast.t);toast.t=setTimeout(()=>t.classList.add('hidden'),2200)}function switchTab(t){tab=t;document.querySelectorAll('.view').forEach(x=>x.classList.toggle('hidden',x.id!==t));document.querySelectorAll('#nav button').forEach(x=>x.classList.toggle('active',x.dataset.tab===t));render()}function goWeek(s){data.current=monday(s);ensure(data.current);save();render()}
+function dayAdd(s,n){const d=new Date(s+'T12:00:00');d.setDate(d.getDate()+n);return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`}function monday(s){const d=new Date(s+'T12:00:00');return dayAdd(s,-((d.getDay()+6)%7))}function currentDate(){let d=new Date();return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`}function blank(){return Array.from({length:7},()=>['rest'])}function ensure(s){if(!data.weeks[s])data.weeks[s]={schedule:blank(),logs:{},notes:{},generated:null};return data.weeks[s]}let W=()=>ensure(data.current);function save(){persistWorkoutData();scheduleWorkoutSync()}function toast(s){const t=$('#toast');t.textContent=s;t.classList.remove('hidden');clearTimeout(toast.t);toast.t=setTimeout(()=>t.classList.add('hidden'),2200)}function switchTab(t){tab=t;document.querySelectorAll('.view').forEach(x=>x.classList.toggle('hidden',x.id!==t));document.querySelectorAll('#nav button').forEach(x=>x.classList.toggle('active',x.dataset.tab===t));render()}function goWeek(s){data.current=monday(s);ensure(data.current);save();render()}
 function toggleDay(i,k){let a=W().schedule[i];if(a.includes(k)){a=a.filter(x=>x!==k)}else if(k==='rest'){a=['rest']}else{a=a.filter(x=>x!=='rest');a.push(k)}W().schedule[i]=a.length?a:['rest'];W().generated=null;save();render()}
 function getPreviousActivities(){const p=data.weeks[dayAdd(data.current,-7)];return p?p.schedule[6]:[]}
 function gen(){const s=W().schedule,p=data.profile;let gs=s.map((a,i)=>a.includes('gym')?i:-1).filter(i=>i>=0),types={},warn=[];const sports=a=>a?.some(x=>['basket','golf','swim'].includes(x));const before=i=>i===0?getPreviousActivities():s[i-1];const lowerCost=i=>(before(i)?.includes('basket')?5:0)+(sports(s[i+1])?3:0)+(sports(s[i])?6:0)+(sports(before(i))?1:0);if(gs.length===1){types[gs[0]]='full'}else if(gs.length>=2){let ranked=[...gs].sort((a,b)=>lowerCost(a)-lowerCost(b)||a-b),lower=ranked[0];types[lower]='lower';let other=gs.filter(i=>i!==lower);let upper=other.find(i=>!sports(s[i]))??other[0];types[upper]='upper';let rest=other.filter(i=>i!==upper);rest.forEach((i,j)=>{let nearLower=Math.abs(i-lower)<=1,nearUpper=Math.abs(i-upper)<=1;types[i]=gs.length>=4&&!sports(s[i])&&!sports(s[i+1])&&!(nearLower&&nearUpper)&&p.pain!=='flare'?(j%2?'upperLight':'fullLight'):'core'})}
@@ -459,14 +462,304 @@ function libraryResults(){
   <p>${esc(a[4])}</p><p class="note">器材：${esc(a[3])} · 替代：${esc(a[5])}</p>
  </article>`).join('')||'<p>没有匹配动作。</p>';
 }
-function historyView(){let keys=Object.keys(data.weeks).sort().reverse();$('#history').innerHTML=`<section class="panel"><h2>历史训练周</h2>${keys.map(k=>`<div class="row between history-item"><div><strong>${k} — ${dayAdd(k,6)}</strong><div class="note">${data.weeks[k].schedule.filter(a=>a.includes('gym')).length}个健身日 · ${Object.values(data.weeks[k].logs||{}).filter(v=>v.done).length}组已打卡</div></div><button class="btn alt small" data-openweek="${k}">打开</button></div>`).join('')}</section><section class="panel"><h2>数据与备份</h2><p>${storageOK?'本页面尝试使用浏览器本地存储保存计划与记录。不同浏览器、设备或文件位置不会自动同步。':'当前环境可能禁止本地保存，请在离开页面前导出备份。'}</p><div class="row"><button class="btn" data-action="backup">导出 JSON 备份</button><button class="btn alt" data-action="import">导入备份</button><input type="file" id="importfile" accept="application/json,.json" class="hidden"></div><p class="note">导入将替换当前应用数据，操作前建议先备份。</p></section><section class="panel"><h2>训练原则</h2><p>每周力量训练可根据运动日程动态分配。减脂以适度热量缺口为主，蛋白质摄入量可根据体重、训练量和个人健康情况调整；不必在连续运动日严格限制碳水。久坐每30–45分钟起身活动几分钟。</p><p>本应用按本地规则分析训练反馈、推荐参考重量和调整后续计划，不提供实时 AI 推理、账号或云同步。出现腰骶部不适时不建议自行复位；动作应以舒适和次日恢复为依据。</p></section>`}
-function render(){ensure(data.current);if(tab==='week')weekView();if(tab==='plan')renderPlan();if(tab==='library')libraryView();if(tab==='history')historyView()}
+function historyView(){let keys=Object.keys(data.weeks).sort().reverse();$('#history').innerHTML=`<section class="panel"><h2>历史训练周</h2>${keys.map(k=>`<div class="row between history-item"><div><strong>${k} — ${dayAdd(k,6)}</strong><div class="note">${data.weeks[k].schedule.filter(a=>a.includes('gym')).length}个健身日 · ${Object.values(data.weeks[k].logs||{}).filter(v=>v.done).length}组已打卡</div></div><button class="btn alt small" data-openweek="${k}">打开</button></div>`).join('')}</section><section class="panel"><h2>数据与备份</h2><p>${syncAccount?'登录后，训练计划与打卡将同步到账号。':storageOK?'访客数据保存在此浏览器。登录账号即可启用跨设备同步。':'当前环境可能禁止本地保存，请在离开页面前导出备份。'}</p><div class="row"><button class="btn" data-action="backup">导出 JSON 备份</button><button class="btn alt" data-action="import">导入备份</button><input type="file" id="importfile" accept="application/json,.json" class="hidden"></div><p class="note">${syncAccount?'登录时导入会合并到账号。':'访客模式下导入将替换当前数据，操作前建议先备份。'}</p></section><section class="panel"><h2>训练原则</h2><p>每周力量训练可根据运动日程动态分配。减脂以适度热量缺口为主，蛋白质摄入量可根据体重、训练量和个人健康情况调整；不必在连续运动日严格限制碳水。久坐每30–45分钟起身活动几分钟。</p><p>本应用按本地规则分析训练反馈、推荐参考重量和调整后续计划。登录账号后可同步各设备的训练记录。出现腰骶部不适时不建议自行复位；动作应以舒适和次日恢复为依据。</p></section>`}
+function render(){ensure(data.current);if(tab==='week')weekView();if(tab==='plan')renderPlan();if(tab==='library')libraryView();if(tab==='history')historyView();if(tab==='account')workoutAccountView()}
 function download(name,content,type){let a=document.createElement('a'),url=URL.createObjectURL(new Blob([content],{type}));a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000)}
 function exportText(){let p=getPlan();let out=[`训练周 ${data.current} — ${dayAdd(data.current,6)}`];p.days.forEach(d=>{out.push(`${days[d.i]}：${d.activities.map(k=>labels[k]).join(' + ')} ${d.gym?.name||''}`);d.gym?.ex.forEach(e=>{let ls=Array.from({length:e.sets},(_,j)=>getLog(d.i,e.id,j));if(e.id==='postbike'){let v=ls[0];out.push('  训练后坐式单车 | '+(v.done?'完成':'未完成')+' '+(v.reps||'—')+' 分钟 / '+(v.weight||'—')+' kcal（估算）');return;}out.push(`  ${E[e.id][0]} ${e.sets}组×${e.reps} | `+ls.map((v,j)=>`第${j+1}组 ${v.done?'完成':'未完成'} ${v.weight||'—'} lb / ${v.reps||'未记实际次数'}`).join('；'))});let visible=new Set((d.gym?.ex||[]).flatMap(e=>Array.from({length:e.sets},(_,j)=>logKey(d.i,e.id,j))));Object.entries(W().logs).filter(([k,v])=>k.startsWith(d.i+':')&&!visible.has(k)&&v.done).forEach(([k,v])=>{let [,id,j]=k.split(':');if(E[id])out.push('  已移除 / 调整动作的历史记录：'+E[id][0]+' 第'+(+j+1)+'组 '+(v.weight||'—')+' lb / '+(v.reps||'未记实际次数'))});if(W().notes[d.i])out.push('  反馈：'+W().notes[d.i]);let f=dailyFeedback(W(),d.i);if(f.pain||f.fatigue)out.push('  状态：'+['pain','fatigue'].map(k=>feedbackOptions[k].find(x=>x[0]===f[k])?.[1]||'未填写').join(' / '));Object.entries(W().effort||{}).filter(([k])=>k.startsWith(d.i+':')).forEach(([k,v])=>{let id=k.split(':')[1];if(E[id]&&v)out.push('  '+E[id][0]+' 完成感受：'+(feedbackOptions.effort.find(x=>x[0]===v)?.[1]||''))})});download(`训练记录-${data.current}.txt`,out.join('\n'),'text/plain;charset=utf-8');if(navigator.clipboard?.writeText)navigator.clipboard.writeText(out.join('\n')).catch(()=>{});toast('训练记录已导出。')}
  document.addEventListener('click',e=>{let b=e.target.closest('button');if(!b)return;if(b.dataset.edit)return handleEdit(b);if(b.dataset.tab)return switchTab(b.dataset.tab);if(b.dataset.planDay!==undefined)return selectPlanDay(b);if(b.dataset.day!==undefined)return toggleDay(+b.dataset.day,b.dataset.kind);if(b.dataset.openweek){goWeek(b.dataset.openweek);return switchTab('week')}switch(b.dataset.action){case'useweights':useWeights(b);break;case'analyze':save();renderPlan();toast('已分析反馈并刷新后续建议');break;case'nextcoach':openNextCoach();break;case'prev':goWeek(dayAdd(data.current,-7));break;case'next':goWeek(dayAdd(data.current,7));break;case'generate':regenerate();break;case'openplan':switchTab('plan');break;case'swap':W().schedule=W().schedule.map(a=>[...new Set(a.map(x=>x==='golf'?'swim':x))]);W().generated=null;save();render();toast('本周高尔夫已替换为游泳');break;case'copyweek':{let p=data.weeks[dayAdd(data.current,-7)];if(!p){toast('尚无上周日程');break}if(confirm('沿用上周日程？当前训练记录会保留。')){W().schedule=p.schedule.map(a=>[...a]);W().generated=null;save();render()}}break;case'exporttext':exportText();break;case'backup':download('fitness-backup-'+data.current+'.json',JSON.stringify(data,null,2),'application/json');break;case'import':$('#importfile').click();break;}});
- document.addEventListener('change',async e=>{let x=e.target;if(x.dataset.pickerFilter==='gear')return updateExercisePicker(x);if(x.dataset.effort){let w=W();(w.effort||(w.effort={}))[x.dataset.effort]=x.value;save();renderPlan();return}if(x.dataset.feedback){let [i,k]=x.dataset.feedback.split(':');let w=W(),f=w.feedback||(w.feedback={});(f[i]||(f[i]={}))[k]=x.value;save();renderPlan();return}if(x.dataset.editfield){if(x.dataset.editfield!=='reps')editField(x);return}if(x.id==='weekdate'&&x.value)return goWeek(x.value);if(['weight','pain','equipment','sets'].includes(x.id)){if(x.id==='weight'&&(+x.value<60||+x.value>500))return;data.profile[x.id]=['sets','weight'].includes(x.id)?+x.value:x.value;W().generated=null;save();render();return}if(x.dataset.log){let [i,id,j,f]=x.dataset.log.split(':');return setLog(+i,id,+j,f,f==='done'?x.checked:x.value)}if(x.id==='catlib'){libCat=x.value;libraryResults()}if(x.id==='gearlib'){libGear=x.value;libraryResults()}if(x.id==='importfile'&&x.files[0]){try{let d=JSON.parse(await x.files[0].text());if(!d.weeks||!d.profile||!/^\d{4}-\d{2}-\d{2}$/.test(d.current)||Object.values(d.weeks).some(w=>!Array.isArray(w.schedule)||w.schedule.length!==7||w.schedule.some(a=>!Array.isArray(a)||a.some(k=>!labels[k]))||!w.logs||!w.notes))throw Error();if(confirm('确定替换当前记录？')){data=d;Object.values(data.weeks).forEach(w=>w.generated=null);save();switchTab('week');toast('备份已导入')}}catch(err){toast('备份格式不正确，未导入。')}}});
+ document.addEventListener('change',async e=>{let x=e.target;if(x.dataset.pickerFilter==='gear')return updateExercisePicker(x);if(x.dataset.effort){let w=W();(w.effort||(w.effort={}))[x.dataset.effort]=x.value;save();renderPlan();return}if(x.dataset.feedback){let [i,k]=x.dataset.feedback.split(':');let w=W(),f=w.feedback||(w.feedback={});(f[i]||(f[i]={}))[k]=x.value;save();renderPlan();return}if(x.dataset.editfield){if(x.dataset.editfield!=='reps')editField(x);return}if(x.id==='weekdate'&&x.value)return goWeek(x.value);if(['weight','pain','equipment','sets'].includes(x.id)){if(x.id==='weight'&&(+x.value<60||+x.value>500))return;data.profile[x.id]=['sets','weight'].includes(x.id)?+x.value:x.value;W().generated=null;save();render();return}if(x.dataset.log){let [i,id,j,f]=x.dataset.log.split(':');return setLog(+i,id,+j,f,f==='done'?x.checked:x.value)}if(x.id==='catlib'){libCat=x.value;libraryResults()}if(x.id==='gearlib'){libGear=x.value;libraryResults()}if(x.id==='importfile'&&x.files[0]){try{let accountAtImport=syncAccount,d=JSON.parse(await x.files[0].text());if(accountAtImport!==syncAccount)return;if(!d.weeks||!d.profile||!/^\d{4}-\d{2}-\d{2}$/.test(d.current)||Object.values(d.weeks).some(w=>!Array.isArray(w.schedule)||w.schedule.length!==7||w.schedule.some(a=>!Array.isArray(a)||a.some(k=>!labels[k]))||!w.logs||!w.notes))throw Error();if(syncAccount){if(confirm('将备份合并到当前账号？')){mergeWorkoutBackup(d);toast('备份已合并，正在同步');}return;}if(confirm('确定替换当前记录？')){data=d;Object.values(data.weeks).forEach(w=>w.generated=null);save();switchTab('week');toast('备份已导入')}}catch(err){toast('备份格式不正确，未导入。')}}});
  document.addEventListener('input',e=>{let x=e.target;if(x.dataset.pickerFilter==='query')return updateExercisePicker(x);if(x.dataset.editfield==='reps')return editField(x);if(x.id==='searchlib'){libSearch=x.value;libraryResults()}if(x.dataset.note!==undefined){W().notes[x.dataset.note]=x.value;save()}if(x.dataset.log&&x.type!=='checkbox'){let [i,id,j,f]=x.dataset.log.split(':');setLog(+i,id,+j,f,x.value)}});
 function repairChatDate(w,i,source,rows){let moved=0,kept=0;for(let [id,j,weight,reps,done] of rows){let src=logKey(source,id,+j-1),dst=logKey(i,id,+j-1),v=w.logs[src],old=w.logs[dst]||{};let matches=v&&String(v.weight??'')===weight&&(!reps||!v.reps||String(v.reps)===reps)&&!!v.done===(done==='1');if(matches){let conflict=(old.weight!==undefined&&old.weight!==''&&String(old.weight)!==weight)||(old.reps&&v.reps&&String(old.reps)!==String(v.reps));if(conflict){kept++;continue}w.logs[dst]={...v,...old,weight:old.weight||v.weight||weight,reps:old.reps||v.reps||reps,done:!!old.done||!!v.done};delete w.logs[src];moved++}else if(v&&(v.done||v.weight||v.reps)){kept++}}if(w.effort?.[source+':shoulder']==='hard'&&!w.logs[logKey(source,'shoulder',0)]?.done&&!w.logs[logKey(source,'shoulder',1)]?.done&&!w.logs[logKey(source,'shoulder',2)]?.done){w.effort[i+':shoulder']=w.effort[i+':shoulder']||'hard';delete w.effort[source+':shoulder']}return {moved,kept}}
 function importChatLog(){let h=new URLSearchParams(location.hash.slice(1));if(!h.has('trainingDate'))return;let date=h.get('trainingDate'),focus=h.get('focus'),raw=h.getAll('set');if(!/^\d{4}-\d{2}-\d{2}$/.test(date)||!Number.isFinite(new Date(date+'T12:00:00').getTime())||!raw.length||raw.length>50)return;let rows=raw.map(v=>v.split(','));if(rows.some(([id,j,weight,reps,done])=>!own(E,id)||!/^([1-6])$/.test(j)||!/^\d{0,4}(\.\d{1,2})?$/.test(weight)||!/^\d{0,3}$/.test(reps)||!['0','1'].includes(done)))return;let week=monday(date),i=Math.round((new Date(date+'T12:00:00')-new Date(week+'T12:00:00'))/86400000);if(i<0||i>6)return;let from=h.get('moveFrom'),source=from?Array.from({length:7},(_,j)=>dayAdd(week,j)).indexOf(from):-1,repair=source>=0&&source!==i;if(from&&!repair){alert('迁移日期无效');return}if(!confirm(repair?'将 '+from+' 误放的匹配打卡迁移至 '+date+'？不匹配的周二记录及原计划会保留，操作前自动保存本地备份。':'将 '+date+' 的聊天训练记录合并到此浏览器？已有打卡与反馈不会被覆盖。'))return;if(repair){try{localStorage.setItem(KEY+'-before-date-repair',JSON.stringify(data))}catch(e){alert('无法保存迁移前备份，未执行迁移。');return}}let w=ensure(week);w.logs=w.logs||{};w.notes=w.notes||{};w.edits=w.edits||{};let result=repair?repairChatDate(w,i,source,rows):null;w.schedule[i]=[...new Set([...w.schedule[i].filter(x=>x!=='rest'),'gym'])];w.generated=null;if(!w.edits[i]&&own(FOCUS,focus)&&focus!=='custom'){w.edits[i]={focus,ex:FOCUS[focus][1].map(id=>({id,sets:id==='postbike'?1:3,reps:E[id][7]}))}}for(let [id,j,weight,reps,done] of rows){let key=logKey(i,id,+j-1),old=w.logs[key]||{};w.logs[key]={...old,weight:old.weight!==undefined&&old.weight!==''?old.weight:weight,reps:old.reps!==undefined&&old.reps!==''?old.reps:reps,done:!!old.done||done==='1'}}let note=(h.get('note')||'').slice(0,500);if(note&&!String(w.notes[i]||'').includes(note))w.notes[i]=[w.notes[i],note].filter(Boolean).join('\n');let effort=h.get('effort');if(effort){let [id,v]=effort.split(',');if(own(E,id)&&feedbackOptions.effort.some(x=>x[0]===v)){w.effort=w.effort||{};if(!w.effort[i+':'+id])w.effort[i+':'+id]=v}}data.current=week;selectedPlanDate=date;save();if(storageOK){history.replaceState(null,'',location.pathname+location.search);toast(repair?'日期已纠正；迁移 '+result.moved+' 项，保留 '+result.kept+' 项不匹配或冲突记录':'聊天训练记录已合并')}else toast('本地保存不可用，请导出备份');switchTab('plan')}
+
+const WORKOUT_CLOUD_URL = 'https://udtonpebadxxkevotzfh.supabase.co';
+const WORKOUT_PUBLISHABLE_KEY = "sb_publishable_ltgqiY5GXrGZzHDTnj7L0g_ovNhfqtu";
+const WORKOUT_SITE_URL = 'https://stevenl0823.github.io/workout-app/fitness-planner.html';
+let syncClient = null;
+let syncAccount = null;
+let syncMessage = '此浏览器中的训练记录';
+let loginEmail = '';
+let loginStage = 'request';
+let loginMessage = '';
+let loginBusy = false;
+let syncTimer;
+let cloudRenderPending = false;
+
+function newWorkoutData(current = monday(currentDate())) {
+ return {current, weeks: {}, profile: {weight:'',height:'',sets:3,pain:'none',equipment:'full'}};
+}
+function readWorkoutData(key) {
+ try { return JSON.parse(localStorage.getItem(key)||'null'); }
+ catch { return null; }
+}
+function accountCacheKey(id) {
+ return KEY+':account:'+id;
+}
+function persistWorkoutData() {
+ try {
+  if(syncAccount){
+   localStorage.setItem(accountCacheKey(syncAccount.id),JSON.stringify({data,base:syncAccount.base}));
+  }else{
+   localStorage.setItem(KEY,JSON.stringify(data));
+  }
+ }catch{storageOK=false;}
+}
+function isWorkoutObject(value) {
+ return value!==null && typeof value==='object' && !Array.isArray(value);
+}
+function hasWorkoutData(week) {
+ return week.schedule?.some(day=>day.some(activity=>activity!=='rest'))
+  || ['logs','notes','edits','effort','feedback'].some(field=>Object.keys(week[field]||{}).length);
+}
+function workoutSnapshot(source) {
+ const weeks=Object.fromEntries(Object.entries(source.weeks).map(([date,week])=>{
+  const {generated,...stored}=week;
+  return [date,stored];
+ }));
+ return JSON.parse(JSON.stringify({profile:source.profile,weeks}));
+}
+function sameWorkoutValue(a,b) {
+ if(a===b)return true;
+ if(Array.isArray(a)&&Array.isArray(b))return a.length===b.length&&a.every((entry,i)=>sameWorkoutValue(entry,b[i]));
+ if(!isWorkoutObject(a)||!isWorkoutObject(b))return false;
+ const keys=Object.keys(a);
+ return keys.length===Object.keys(b).length&&keys.every(key=>own(b,key)&&sameWorkoutValue(a[key],b[key]));
+}
+function mergeWorkoutValues(base,local,remote,key) {
+ if(sameWorkoutValue(local,base))return remote;
+ if(sameWorkoutValue(remote,base)||sameWorkoutValue(local,remote))return local;
+ if(key==='schedule'&&Array.isArray(local)&&Array.isArray(remote)){
+  const prior=Array.isArray(base)?base:blank();
+  return local.map((day,i)=>mergeWorkoutValues(prior[i],day,remote[i]));
+ }
+ if(!isWorkoutObject(local)||!isWorkoutObject(remote))return local;
+ const prior=isWorkoutObject(base)?base:{};
+ const keys=new Set([...Object.keys(prior),...Object.keys(local),...Object.keys(remote)]);
+ return Object.fromEntries([...keys].map(field=>[
+  field,mergeWorkoutValues(own(prior,field)?prior[field]:undefined,own(local,field)?local[field]:undefined,own(remote,field)?remote[field]:undefined,field)
+ ]).filter(([,value])=>value!==undefined));
+}
+function applyWorkoutSnapshot(snapshot) {
+ data={current:data.current,profile:snapshot.profile,weeks:snapshot.weeks};
+ ensure(data.current);
+}
+function updateWorkoutSyncStatus(message) {
+ syncMessage=message;
+ const status=$('#workout-sync-status');
+ if(status)status.textContent=message;
+}
+function scheduleWorkoutSync(delay=650) {
+ clearTimeout(syncTimer);
+ if(syncClient&&syncAccount)syncTimer=setTimeout(syncWorkouts,delay);
+}
+function renderAfterCloudChange() {
+ if(document.activeElement?.matches('#week :is(input,select,textarea), #plan :is(input,select,textarea)')){
+  cloudRenderPending=true;
+  return;
+ }
+ cloudRenderPending=false;
+ render();
+}
+async function syncWorkouts() {
+ const account=syncAccount;
+ if(!account||account.running||!syncClient)return;
+ if(navigator.onLine===false){
+  updateWorkoutSyncStatus('离线 · 修改保存在本机，联网后会同步');
+  return;
+ }
+ account.running=true;
+ const table=()=>syncClient.from('workout_sync');
+ updateWorkoutSyncStatus('正在同步…');
+ try{
+  for(let attempt=0;attempt<3;attempt++){
+   const read=await table().select('revision,snapshot').eq('user_id',account.id).maybeSingle();
+   if(syncAccount!==account)return;
+   if(read.error)throw read.error;
+   const row=read.data;
+   const remote=row?.snapshot||workoutSnapshot(newWorkoutData());
+   const sent=workoutSnapshot(data);
+   const desired=mergeWorkoutValues(account.base,sent,remote);
+   if(!sameWorkoutValue(desired,remote)){
+    const write=row
+     ? await table().update({snapshot:desired,revision:row.revision+1,updated_at:new Date().toISOString()}).eq('user_id',account.id).eq('revision',row.revision).select('revision').maybeSingle()
+     : await table().insert({user_id:account.id,snapshot:desired}).select('revision').maybeSingle();
+    if(syncAccount!==account)return;
+    if(write.error?.code==='23505'||(!write.error&&!write.data))continue;
+    if(write.error)throw write.error;
+   }
+   const latest=workoutSnapshot(data);
+   const merged=mergeWorkoutValues(sent,latest,desired);
+   account.base=desired;
+   if(!sameWorkoutValue(latest,merged)){
+    applyWorkoutSnapshot(merged);
+    renderAfterCloudChange();
+   }
+   persistWorkoutData();
+   if(!sameWorkoutValue(merged,desired)){
+    updateWorkoutSyncStatus('还有修改待同步');
+    scheduleWorkoutSync();
+   }else{
+    updateWorkoutSyncStatus('已同步');
+   }
+   return;
+  }
+  throw new Error('Concurrent workout edits');
+ }catch{
+  if(syncAccount===account)updateWorkoutSyncStatus('暂未同步 · 修改保存在此浏览器，可重试');
+ }finally{
+  account.running=false;
+ }
+}
+function setWorkoutUser(user) {
+ if((syncAccount?.id||null)===(user?.id||null))return;
+ clearTimeout(syncTimer);
+ if(user){
+  const cached=readWorkoutData(accountCacheKey(user.id));
+  syncAccount={id:user.id,email:user.email,base:cached?.base||workoutSnapshot(newWorkoutData()),running:false};
+  data=cached?.data?.weeks?cached.data:newWorkoutData();
+  loginEmail='';
+  loginMessage='';
+  loginStage='request';
+  updateWorkoutSyncStatus('准备同步…');
+ }else{
+  syncAccount=null;
+  const guest=readWorkoutData(KEY);
+  data=guest?.weeks?guest:newWorkoutData();
+  updateWorkoutSyncStatus('此浏览器中的训练记录');
+ }
+ selectedPlanDate=null;
+ cloudRenderPending=false;
+ ensure(data.current);
+ render();
+ scheduleWorkoutSync(0);
+}
+function mergeWorkoutBackup(backup) {
+ const current=workoutSnapshot(data);
+ const imported=workoutSnapshot(backup);
+ const combined=mergeWorkoutValues(workoutSnapshot(newWorkoutData()),current,imported);
+ applyWorkoutSnapshot(combined);
+ save();
+ render();
+}
+function workoutAccountView() {
+ if(syncAccount){
+  const guest=readWorkoutData(KEY);
+  const localRecords=guest?.weeks&&Object.values(guest.weeks).some(hasWorkoutData);
+  $('#account').innerHTML=`<section class="panel account-panel">
+   <h2>账号与同步</h2>
+   <p>${esc(syncAccount.email)}</p>
+   <p id="workout-sync-status" class="note" role="status">${esc(syncMessage)}</p>
+   <div class="row">
+    <button type="button" class="btn small" data-sync-action="sync">立即同步</button>
+    <button type="button" class="btn alt small" data-sync-action="signout">退出登录</button>
+   </div>
+  </section>
+  ${localRecords?`<section class="panel account-panel">
+   <h3>此浏览器的旧记录</h3>
+   <p class="note">把登录前保存在此浏览器里的训练记录和计划合并到账号。</p>
+   <button type="button" class="btn alt" data-sync-action="migrate">合并本机旧记录</button>
+  </section>`:''}`;
+  return;
+ }
+ $('#account').innerHTML=`<section class="panel account-panel">
+  <h2>Gmail 邮箱登录</h2>
+  <p class="note">在手机和电脑用同一个 Gmail 地址登录，即可同步训练计划和打卡。</p>
+  ${loginStage==='verify'?`<form id="workout-verify" class="account-form">
+   <p class="note">邮件发送给 ${esc(loginEmail)}。在 Gmail 中长按邮件里的登录按钮，复制链接后粘贴到下方。如果邮件显示验证码，也可以直接填验证码。</p>
+   <label class="field">登录链接或验证码<input name="verification" type="text" autocomplete="one-time-code" autocapitalize="off" required></label>
+   <div class="row"><button class="btn" type="submit"${loginBusy?' disabled':''}>完成登录</button>
+   <button class="btn alt" type="button" data-sync-action="restart">返回</button></div>
+  </form>`:`<form id="workout-email" class="account-form">
+   <label class="field">Gmail 地址<input name="email" type="email" autocomplete="email" autocapitalize="off" placeholder="name@gmail.com" value="${esc(loginEmail)}" required></label>
+   <button class="btn" type="submit"${loginBusy||!syncClient?' disabled':''}>发送登录邮件</button>
+  </form>`}
+  <p class="note" role="status">${esc(loginMessage)}</p>
+ </section>`;
+}
+function workoutEmailProof(input,email){
+ const value=input.trim();
+ if(/^\d{6,8}$/.test(value))return {email,token:value,type:'email'};
+ const url=new URL(value);
+ if(url.origin!==WORKOUT_CLOUD_URL||url.pathname!=='/auth/v1/verify')throw new Error('请粘贴健身 App 登录邮件中的链接。');
+ const token_hash=url.searchParams.get('token');
+ const type=url.searchParams.get('type');
+ if(!token_hash||!['magiclink','signup','email'].includes(type))throw new Error('请粘贴完整的登录链接。');
+ return {token_hash,type:'email'};
+}
+async function submitWorkoutAuth(event) {
+ const form=event.target;
+ if(!['workout-email','workout-verify'].includes(form.id))return;
+ event.preventDefault();
+ if(loginBusy||!syncClient)return;
+ const fields=new FormData(form);
+ const sending=form.id==='workout-email';
+ loginBusy=true;
+ loginMessage=sending?'正在发送…':'正在验证…';
+ workoutAccountView();
+ try{
+  if(sending){
+   loginEmail=String(fields.get('email')).trim().toLowerCase();
+   if(!/^[^\s@]+@gmail\.com$/.test(loginEmail))throw new Error('请输入 Gmail 地址。');
+   const result=await syncClient.auth.signInWithOtp({email:loginEmail,options:{emailRedirectTo:WORKOUT_SITE_URL}});
+   if(result.error)throw new Error(result.error.status===429?'发送太频繁，请稍后再试。':'发送失败，请确认该 Gmail 是项目组织的邮箱，再试一次。');
+   loginStage='verify';
+  }else{
+   let proof;
+   try{proof=workoutEmailProof(String(fields.get('verification')),loginEmail);}
+   catch{throw new Error('请输入邮件里的验证码，或粘贴完整的登录链接。');}
+   const result=await syncClient.auth.verifyOtp(proof);
+   if(result.error||!result.data.user)throw new Error('登录链接或验证码无效，也可能已使用。请返回并重新发送一封。');
+   setWorkoutUser(result.data.user);
+  }
+  loginMessage='';
+ }catch(error){
+  loginMessage=error.message||'暂时无法登录，请稍后重试。';
+ }finally{
+  loginBusy=false;
+  if(tab==='account')workoutAccountView();
+ }
+}
+async function handleWorkoutAccountAction(event){
+ const action=event.target.closest('[data-sync-action]')?.dataset.syncAction;
+ if(action==='sync')return syncWorkouts();
+ if(action==='restart'){
+  loginStage='request';
+  loginMessage='';
+  workoutAccountView();
+ }
+ if(action==='migrate'&&syncAccount){
+  const guest=readWorkoutData(KEY);
+  if(guest?.weeks&&confirm('把此浏览器的旧计划和打卡合并到当前账号？'))mergeWorkoutBackup(guest);
+ }
+ if(action==='signout'&&syncAccount){
+  const result=await syncClient.auth.signOut({scope:'local'});
+  if(result.error){updateWorkoutSyncStatus('退出失败，请重试。');return;}
+  setWorkoutUser(null);
+ }
+}
+function startWorkoutCloud(){
+ if(!window.supabase){
+  loginMessage='登录服务加载失败，刷新页面后可重试。';
+  if(tab==='account')workoutAccountView();
+  return;
+ }
+ syncClient=window.supabase.createClient(WORKOUT_CLOUD_URL,WORKOUT_PUBLISHABLE_KEY,{auth:{flowType:'implicit'}});
+ syncClient.auth.onAuthStateChange((event,session)=>{
+  if(['INITIAL_SESSION','SIGNED_IN','SIGNED_OUT','USER_UPDATED'].includes(event)){
+   setTimeout(()=>setWorkoutUser(session?.user||null),0);
+  }
+ });
+ document.addEventListener('submit',submitWorkoutAuth);
+ document.addEventListener('click',handleWorkoutAccountAction);
+ document.addEventListener('visibilitychange',()=>{if(!document.hidden)scheduleWorkoutSync(0);});
+ document.addEventListener('focusout',()=>{
+  if(cloudRenderPending)setTimeout(renderAfterCloudChange,0);
+ });
+ window.addEventListener('online',()=>scheduleWorkoutSync(0));
+ setInterval(()=>{if(!document.hidden&&syncAccount)syncWorkouts();},20000);
+ if(tab==='account')workoutAccountView();
+}
+
 ensure(data.current);save();render();importChatLog();window.addEventListener('hashchange',importChatLog);
+document.addEventListener('DOMContentLoaded',startWorkoutCloud);
 </script></body></html>
